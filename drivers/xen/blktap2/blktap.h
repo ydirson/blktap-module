@@ -125,7 +125,7 @@ struct blktap_ring {
 	wait_queue_head_t              poll_wait;
 
 	dev_t                          devno;
-	struct class_device           *dev;
+	struct device                 *dev;
 	atomic_t                       sysfs_refcnt;
 	struct mutex                   sysfs_mutex;
 };

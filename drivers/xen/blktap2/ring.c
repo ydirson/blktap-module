@@ -66,16 +66,14 @@ blktap_read_ring(struct blktap *tap)
 	return 0;
 }
 
-static struct page *
-blktap_ring_nopage(struct vm_area_struct *vma,
-		   unsigned long address, int *type)
+static int blktap_ring_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	/*
 	 * if the page has not been mapped in by the driver then return
-	 * NOPAGE_SIGBUS to the domain.
+	 * VM_FAULT_SIGBUS to the domain.
 	 */
 
-	return NOPAGE_SIGBUS;
+	return VM_FAULT_SIGBUS;
 }
 
 static pte_t
@@ -205,7 +203,7 @@ blktap_ring_vm_close(struct vm_area_struct *vma)
 static struct vm_operations_struct blktap_ring_vm_operations = {
 	.close    = blktap_ring_vm_close,
 	.unmap    = blktap_ring_vm_unmap,
-	.nopage   = blktap_ring_nopage,
+	.fault    = blktap_ring_fault,
 	.zap_pte  = blktap_ring_clear_pte,
 };
 
