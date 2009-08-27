@@ -152,11 +152,12 @@ blktap_sysfs_pause_device(struct device *dev,
 	}
 
 	err = blktap_device_pause(tap);
+/*
 	if (!err) {
 		device_remove_file(dev, &dev_attr_pause);
 		err = device_create_file(dev, &dev_attr_resume);
 	}
-
+*/
 out:
 	blktap_sysfs_exit(tap);
 
@@ -185,11 +186,12 @@ blktap_sysfs_resume_device(struct device *dev,
 	}
 
 	err = blktap_device_resume(tap);
+/*
 	if (!err) {
 		device_remove_file(dev, &dev_attr_resume);
 		err = device_create_file(dev, &dev_attr_pause);
 	}
-
+*/
 out:
 	blktap_sysfs_exit(tap);
 
@@ -324,12 +326,17 @@ blktap_sysfs_create(struct blktap *tap)
 	err = device_create_file(dev, &dev_attr_pause);
 	if (err)
 		goto out_unregister_remove;
-	err = device_create_file(dev, &dev_attr_debug);
+	err = device_create_file(dev, &dev_attr_resume);
 	if (err)
 		goto out_unregister_pause;
+	err = device_create_file(dev, &dev_attr_debug);
+	if (err)
+		goto out_unregister_resume;
 
 	return 0;
 
+out_unregister_resume:
+	device_remove_file(dev, &dev_attr_resume);
 out_unregister_pause:
 	device_remove_file(dev, &dev_attr_pause);
 out_unregister_remove:
