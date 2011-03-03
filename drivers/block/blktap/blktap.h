@@ -78,7 +78,6 @@ struct blktap_request {
 	int                            usr_idx;
 
 	int                            operation;
-	struct timeval                 time;
 
 	struct scatterlist             sg_table[BLKTAP_SEGMENT_MAX];
 	struct page                   *pages[BLKTAP_SEGMENT_MAX];

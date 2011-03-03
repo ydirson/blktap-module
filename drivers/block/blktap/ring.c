@@ -304,8 +304,6 @@ blktap_ring_submit_request(struct blktap *tap,
 	}
 
 	ring->ring.req_prod_pvt++;
-
-	do_gettimeofday(&request->time);
 }
 
 static int
@@ -547,20 +545,20 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 
 	for (usr_idx = 0; usr_idx < BLKTAP_RING_SIZE; usr_idx++) {
 		struct blktap_request *request;
-		struct timeval *time;
+		struct timeval t;
 
 		request = ring->pending[usr_idx];
 		if (!request)
 			continue;
 
-		time  = &request->time;
+		jiffies_to_timeval(jiffies - request->rq->start_time, &t);
 
 		s += snprintf(s, end - s,
 			      "%02d: usr_idx:%02d "
 			      "op:%x nr_pages:%02d time:%lu.%09lu\n",
 			      usr_idx, request->usr_idx,
 			      request->operation, request->nr_pages,
-			      time->tv_sec, time->tv_usec);
+			      t.tv_sec, t.tv_usec);
 	}
 
 	s += snprintf(s, end - s, "end pending\n");
