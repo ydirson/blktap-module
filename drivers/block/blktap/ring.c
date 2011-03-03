@@ -241,28 +241,16 @@ blktap_ring_make_request(struct blktap *tap)
 	return request;
 }
 
-void
-blktap_ring_submit_request(struct blktap *tap,
-			   struct blktap_request *request)
+static int
+blktap_ring_make_rw_request(struct blktap *tap,
+			    struct blktap_request *request,
+			    struct blktap_ring_request *breq)
 {
-	struct blktap_ring *ring = &tap->ring;
-	struct blktap_ring_request *breq;
 	struct scatterlist *sg;
-	int i, nsecs = 0;
-
-	dev_dbg(ring->dev,
-		"request %d [%p] submit\n", request->usr_idx, request);
-
-	breq = RING_GET_REQUEST(&ring->ring, ring->ring.req_prod_pvt);
-
-	breq->id            = request->usr_idx;
-	breq->sector_number = blk_rq_pos(request->rq);
-	breq->__pad         = 0;
-	breq->operation     = request->operation;
-	breq->nr_segments   = request->nr_pages;
+	unsigned int i, nsecs = 0;
 
 	blktap_for_each_sg(sg, request, i) {
-		struct blktap_segment *seg = &breq->seg[i];
+		struct blktap_segment *seg = &breq->u.rw.seg[i];
 		int first, count;
 
 		count = sg->length >> 9;
@@ -274,20 +262,50 @@ blktap_ring_submit_request(struct blktap *tap,
 		nsecs += count;
 	}
 
+	breq->u.rw.sector_number = blk_rq_pos(request->rq);
+
+	return nsecs;
+}
+
+void
+blktap_ring_submit_request(struct blktap *tap,
+			   struct blktap_request *request)
+{
+	struct blktap_ring *ring = &tap->ring;
+	struct blktap_ring_request *breq;
+	int nsecs;
+
+	dev_dbg(ring->dev,
+		"request %d [%p] submit\n", request->usr_idx, request);
+
+	breq = RING_GET_REQUEST(&ring->ring, ring->ring.req_prod_pvt);
+
+	breq->id            = request->usr_idx;
+	breq->__pad         = 0;
+	breq->operation     = request->operation;
+	breq->nr_segments   = request->nr_pages;
+
+	switch (breq->operation) {
+	case BLKTAP_OP_READ:
+		nsecs = blktap_ring_make_rw_request(tap, request, breq);
+
+		tap->stats.st_rd_sect += nsecs;
+		tap->stats.st_rd_req++;
+		break;
+
+	case BLKTAP_OP_WRITE:
+		nsecs = blktap_ring_make_rw_request(tap, request, breq);
+
+		tap->stats.st_wr_sect += nsecs;
+		tap->stats.st_wr_req++;
+		break;
+	default:
+		BUG();
+	}
+
 	ring->ring.req_prod_pvt++;
 
 	do_gettimeofday(&request->time);
-
-
-	if (request->operation == BLKTAP_OP_WRITE) {
-		tap->stats.st_wr_sect += nsecs;
-		tap->stats.st_wr_req++;
-	}
-
-	if (request->operation == BLKTAP_OP_READ) {
-		tap->stats.st_rd_sect += nsecs;
-		tap->stats.st_rd_req++;
-	}
 }
 
 static int
@@ -530,20 +548,18 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 	for (usr_idx = 0; usr_idx < BLKTAP_RING_SIZE; usr_idx++) {
 		struct blktap_request *request;
 		struct timeval *time;
-		int write;
 
 		request = ring->pending[usr_idx];
 		if (!request)
 			continue;
 
-		write = request->operation == BLKTAP_OP_WRITE;
 		time  = &request->time;
 
 		s += snprintf(s, end - s,
 			      "%02d: usr_idx:%02d "
-			      "op:%c nr_pages:%02d time:%lu.%09lu\n",
+			      "op:%x nr_pages:%02d time:%lu.%09lu\n",
 			      usr_idx, request->usr_idx,
-			      write ? 'W' : 'R', request->nr_pages,
+			      request->operation, request->nr_pages,
 			      time->tv_sec, time->tv_usec);
 	}
 

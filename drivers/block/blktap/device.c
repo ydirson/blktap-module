@@ -167,7 +167,7 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 {
 	struct blktap_device *tapdev = &tap->device;
 	struct blktap_request *request;
-	int write, nsegs;
+	int nsegs;
 	int err;
 
 	request = blktap_ring_make_request(tap);
@@ -181,15 +181,17 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 		goto fail;
 	}
 
-	write = rq_data_dir(rq) == WRITE;
+	if (!blk_fs_request(rq)) {
+		err = -EOPNOTSUPP;
+		goto fail;
+	}
+
 	nsegs = blk_rq_map_sg(rq->q, rq, request->sg_table);
 
-	dev_dbg(disk_to_dev(tapdev->gd),
-		"make_request: op=%c bytes=%d nsegs=%d\n",
-		write ? 'w' : 'r', blk_rq_bytes(rq), nsegs);
-
-	request->rq = rq;
-	request->operation = write ? BLKTAP_OP_WRITE : BLKTAP_OP_READ;
+	if (rq_data_dir(rq) == WRITE)
+		request->operation = BLKTAP_OP_WRITE;
+	else
+		request->operation = BLKTAP_OP_READ;
 
 	err = blktap_request_get_pages(tap, request, nsegs);
 	if (err)
@@ -199,6 +201,7 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 	if (err)
 		goto fail;
 
+	request->rq = rq;
 	blktap_ring_submit_request(tap, request);
 
 	return 0;
@@ -242,11 +245,6 @@ blktap_device_run_queue(struct blktap *tap)
 		rq = __blktap_next_queued_rq(q);
 		if (!rq)
 			break;
-
-		if (!blk_fs_request(rq)) {
-			__blktap_end_queued_rq(rq, -EOPNOTSUPP);
-			continue;
-		}
 
 		spin_unlock_irq(&tapdev->lock);
 

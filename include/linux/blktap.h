@@ -51,13 +51,19 @@ struct blktap_segment {
 
 #define BLKTAP_SEGMENT_MAX      11
 
+struct blktap_ring_rw_request {
+	uint64_t                sector_number;
+	struct blktap_segment   seg[BLKTAP_SEGMENT_MAX];
+};
+
 struct blktap_ring_request {
 	uint8_t                 operation;
 	uint8_t                 nr_segments;
 	uint16_t                __pad;
 	uint64_t                id;
-	uint64_t                sector_number;
-	struct blktap_segment   seg[BLKTAP_SEGMENT_MAX];
+	union {
+		struct blktap_ring_rw_request   rw;
+	} u;
 };
 
 #define BLKTAP_RSP_EOPNOTSUPP  -2
