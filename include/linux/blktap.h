@@ -18,6 +18,7 @@
 
 #define BLKTAP_DEVICE_FLAG_RO       0x00000001UL /* disk is R/O */
 #define BLKTAP_DEVICE_FLAG_PSZ      0x00000002UL /* physical sector size */
+#define BLKTAP_DEVICE_FLAG_FLUSH    0x00000004UL /* supports FLUSH */
 
 struct blktap_info {
 	unsigned int            ring_major;
@@ -51,6 +52,7 @@ struct blktap_segment {
 
 #define BLKTAP_OP_READ          0
 #define BLKTAP_OP_WRITE         1
+#define BLKTAP_OP_FLUSH         2
 
 #define BLKTAP_SEGMENT_MAX      11
 

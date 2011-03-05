@@ -162,6 +162,15 @@ blktap_device_end_request(struct blktap *tap,
 	blktap_end_rq(rq, error);
 }
 
+static void
+blktap_device_prepare_flush(struct request_queue *q, struct request *rq)
+{
+	rq->cmd_type = REQ_TYPE_BLOCK_PC;
+	rq->timeout  = q->rq_timeout;
+	rq->cmd[0]   = BLKTAP_OP_FLUSH;
+	rq->cmd_len  = 1;
+}
+
 int
 blktap_device_make_request(struct blktap *tap, struct request *rq)
 {
@@ -179,6 +188,12 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 			goto stop;
 
 		goto fail;
+	}
+
+	if (blk_pc_request(rq)) {
+		request->operation = rq->cmd[0];
+		request->nr_pages  = 0;
+		goto submit;
 	}
 
 	if (!blk_fs_request(rq)) {
@@ -201,6 +216,7 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 	if (err)
 		goto fail;
 
+submit:
 	request->rq = rq;
 	blktap_ring_submit_request(tap, request);
 
@@ -304,8 +320,12 @@ blktap_device_configure(struct blktap *tap,
 	/* Make sure buffer addresses are sector-aligned. */
 	blk_queue_dma_alignment(rq, 511);
 
-	/* We are reordering, but cacheless. */
-	blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN, NULL);
+	/* Enable cache control */
+	if (info->flags & BLKTAP_DEVICE_FLAG_FLUSH)
+		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN_FLUSH,
+				  blktap_device_prepare_flush);
+	else
+		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN, NULL);
 }
 
 static int
@@ -497,11 +517,13 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	set_bit(BLKTAP_DEVICE, &tap->dev_inuse);
 
 	dev_info(disk_to_dev(gd),
-		 "sector-size: %u/%u+%u capacity: %llu\n"
+		 "sector-size: %u/%u+%u capacity: %llu"
+		 " ordered: %#x\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
 		 queue_alignment_offset(rq),
-		 (unsigned long long)get_capacity(gd));
+		 (unsigned long long)get_capacity(gd),
+		 rq->ordered);
 
 	return 0;
 

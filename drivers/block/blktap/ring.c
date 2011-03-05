@@ -299,6 +299,12 @@ blktap_ring_submit_request(struct blktap *tap,
 		tap->stats.st_wr_sect += nsecs;
 		tap->stats.st_wr_req++;
 		break;
+
+	case BLKTAP_OP_FLUSH:
+		breq->u.rw.sector_number = 0;
+		tap->stats.st_fl_req++;
+		break;
+
 	default:
 		BUG();
 	}
@@ -447,6 +453,7 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 
 		mask  = BLKTAP_DEVICE_FLAG_RO;
 		mask |= BLKTAP_DEVICE_FLAG_PSZ;
+		mask |= BLKTAP_DEVICE_FLAG_FLUSH;
 
 		memset(&info, 0, sizeof(info));
 		sz = base_sz = BLKTAP_INFO_SIZE_AT(flags);
