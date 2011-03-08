@@ -135,9 +135,11 @@ __blktap_end_rq(struct request *rq, int err)
 static inline void
 blktap_end_rq(struct request *rq, int err)
 {
-	spin_lock_irq(rq->q->queue_lock);
+	struct request_queue *q = rq->q;
+
+	spin_lock_irq(q->queue_lock);
 	__blktap_end_rq(rq, err);
-	spin_unlock_irq(rq->q->queue_lock);
+	spin_unlock_irq(q->queue_lock);
 }
 
 void
