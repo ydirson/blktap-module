@@ -446,12 +446,16 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 		size_t base_sz, sz;
 
 		mask  = BLKTAP_DEVICE_FLAG_RO;
+		mask |= BLKTAP_DEVICE_FLAG_PSZ;
 
 		memset(&info, 0, sizeof(info));
 		sz = base_sz = BLKTAP_INFO_SIZE_AT(flags);
 
 		if (copy_from_user(&info, ptr, sz))
 			return -EFAULT;
+
+		if ((info.flags & BLKTAP_DEVICE_FLAG_PSZ) != 0)
+			sz = BLKTAP_INFO_SIZE_AT(phys_block_offset);
 
 		if (sz > base_sz)
 			if (copy_from_user(&info, ptr, sz))

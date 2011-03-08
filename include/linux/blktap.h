@@ -17,6 +17,7 @@
 #define BLKTAP_IOCTL_REMOVE_DEVICE  207
 
 #define BLKTAP_DEVICE_FLAG_RO       0x00000001UL /* disk is R/O */
+#define BLKTAP_DEVICE_FLAG_PSZ      0x00000002UL /* physical sector size */
 
 struct blktap_info {
 	unsigned int            ring_major;
@@ -28,6 +29,8 @@ struct blktap_device_info {
 	unsigned long long      capacity;
 	unsigned int            sector_size;
 	unsigned long           flags;
+	unsigned int            phys_block_size;
+	unsigned int            phys_block_offset;
 };
 
 /*

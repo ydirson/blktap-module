@@ -286,9 +286,12 @@ blktap_device_configure(struct blktap *tap,
 	set_capacity(gd, info->capacity);
 	set_disk_ro(gd, !!(info->flags & BLKTAP_DEVICE_FLAG_RO));
 
-	/* Hard sector size and max sectors impersonate the equiv. hardware. */
 	blk_queue_logical_block_size(rq, info->sector_size);
 	blk_queue_max_sectors(rq, 512);
+
+	/* Hard sector size and alignment in hardware */
+	blk_queue_physical_block_size(rq, info->phys_block_size);
+	blk_queue_alignment_offset(rq, info->phys_block_offset);
 
 	/* Each segment in a request is up to an aligned page in size. */
 	blk_queue_segment_boundary(rq, PAGE_SIZE - 1);
@@ -321,11 +324,31 @@ blktap_device_validate_info(struct blktap *tap,
 	    info->capacity > ULLONG_MAX >> ilog2(info->sector_size))
 		goto fail;
 
+	/* physical blocks default to logical ones */
+	if (!(info->flags & BLKTAP_DEVICE_FLAG_PSZ)) {
+		info->phys_block_size   = info->sector_size;
+		info->phys_block_offset = 0;
+	}
+
+	/* phys block size is 2^n and >= logical */
+	if (info->phys_block_size < info->sector_size ||
+	    !is_power_of_2(info->phys_block_size))
+		goto fail;
+
+	/* alignment offset < physical/logical */
+	if (info->phys_block_offset % info->sector_size ||
+	    info->phys_block_offset >= info->phys_block_size)
+		goto fail;
+
 	return 0;
 
 fail:
-	dev_err(dev, "capacity: %llu, sector-size: %u\n",
-		info->capacity, info->sector_size);
+	dev_err(dev,
+		"capacity: %llu, sector-size: %u/%u+%u, "
+		"flags: %#lx"
+		info->capacity, info->sector_size,
+		info->phys_block_size, info->phys_block_offset,
+		info->flags);
 	return -EINVAL;
 }
 
@@ -473,9 +496,11 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 
 	set_bit(BLKTAP_DEVICE, &tap->dev_inuse);
 
-	dev_info(disk_to_dev(gd), "sector-size: %u/%u capacity: %llu\n",
+	dev_info(disk_to_dev(gd),
+		 "sector-size: %u/%u+%u capacity: %llu\n"
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
+		 queue_alignment_offset(rq),
 		 (unsigned long long)get_capacity(gd));
 
 	return 0;
