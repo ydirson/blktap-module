@@ -201,6 +201,12 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 		goto fail;
 	}
 
+	if (blk_discard_rq(rq)) {
+		request->operation = BLKTAP_OP_TRIM;
+		request->nr_pages  = 0;
+		goto submit;
+	}
+
 	nsegs = blk_rq_map_sg(rq->q, rq, request->sg_table);
 
 	if (rq_data_dir(rq) == WRITE)
@@ -326,6 +332,12 @@ blktap_device_configure(struct blktap *tap,
 				  blktap_device_prepare_flush);
 	else
 		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN, NULL);
+
+	/* Block discards */
+	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {
+		blk_queue_max_discard_sectors(rq, UINT_MAX);
+		queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, rq);
+	}
 }
 
 static int
@@ -360,14 +372,27 @@ blktap_device_validate_info(struct blktap *tap,
 	    info->phys_block_offset >= info->phys_block_size)
 		goto fail;
 
+	/* trim info vs logical addressing */
+	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {
+
+		if (info->trim_block_size < info->sector_size ||
+		    !is_power_of_2(info->trim_block_size))
+			goto fail;
+
+		if (info->trim_block_offset % info->sector_size ||
+		    info->trim_block_offset >= info->trim_block_size)
+			goto fail;
+	}
+
 	return 0;
 
 fail:
 	dev_err(dev,
 		"capacity: %llu, sector-size: %u/%u+%u, "
-		"flags: %#lx"
+		"trim: %u+%u flags: %#lx\n",
 		info->capacity, info->sector_size,
 		info->phys_block_size, info->phys_block_offset,
+		info->trim_block_size, info->trim_block_offset,
 		info->flags);
 	return -EINVAL;
 }
@@ -518,11 +543,12 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 
 	dev_info(disk_to_dev(gd),
 		 "sector-size: %u/%u+%u capacity: %llu"
-		 " ordered: %#x\n",
+		 " discard: %d ordered: %#x\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
 		 queue_alignment_offset(rq),
 		 (unsigned long long)get_capacity(gd),
+		 blk_queue_discard(rq),
 		 rq->ordered);
 
 	return 0;

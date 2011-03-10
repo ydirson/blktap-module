@@ -19,6 +19,8 @@
 #define BLKTAP_DEVICE_FLAG_RO       0x00000001UL /* disk is R/O */
 #define BLKTAP_DEVICE_FLAG_PSZ      0x00000002UL /* physical sector size */
 #define BLKTAP_DEVICE_FLAG_FLUSH    0x00000004UL /* supports FLUSH */
+#define BLKTAP_DEVICE_FLAG_TRIM     0x00000008UL /* supports TRIM */
+#define BLKTAP_DEVICE_FLAG_TRIM_RZ  0x00000010UL /* trimmed data reads zero */
 
 struct blktap_info {
 	unsigned int            ring_major;
@@ -32,6 +34,8 @@ struct blktap_device_info {
 	unsigned long           flags;
 	unsigned int            phys_block_size;
 	unsigned int            phys_block_offset;
+	unsigned int            trim_block_size;
+	unsigned int            trim_block_offset;
 };
 
 /*
@@ -53,12 +57,18 @@ struct blktap_segment {
 #define BLKTAP_OP_READ          0
 #define BLKTAP_OP_WRITE         1
 #define BLKTAP_OP_FLUSH         2
+#define BLKTAP_OP_TRIM          3
 
 #define BLKTAP_SEGMENT_MAX      11
 
 struct blktap_ring_rw_request {
 	uint64_t                sector_number;
 	struct blktap_segment   seg[BLKTAP_SEGMENT_MAX];
+};
+
+struct blktap_ring_tr_request {
+	uint64_t                sector_number;
+	uint64_t                nr_sectors;
 };
 
 struct blktap_ring_request {
@@ -68,6 +78,7 @@ struct blktap_ring_request {
 	uint64_t                id;
 	union {
 		struct blktap_ring_rw_request   rw;
+		struct blktap_ring_tr_request   tr;
 	} u;
 };
 

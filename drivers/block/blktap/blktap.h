@@ -61,10 +61,12 @@ struct blktap_statistics {
 	unsigned long                  st_print;
 	int                            st_rd_req;
 	int                            st_wr_req;
+	int                            st_tr_req;
 	int                            st_oo_req;
 	int                            st_fl_req;
 	int                            st_rd_sect;
 	int                            st_wr_sect;
+	int                            st_tr_sect;
 	s64                            st_rd_cnt;
 	s64                            st_rd_sum_usecs;
 	s64                            st_rd_max_usecs;

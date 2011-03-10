@@ -267,6 +267,20 @@ blktap_ring_make_rw_request(struct blktap *tap,
 	return nsecs;
 }
 
+static int
+blktap_ring_make_tr_request(struct blktap *tap,
+			    struct blktap_request *request,
+			    struct blktap_ring_request *breq)
+{
+	struct bio *bio = request->rq->bio;
+	unsigned int nsecs;
+
+	breq->u.tr.nr_sectors    = nsecs = bio_sectors(bio);
+	breq->u.tr.sector_number = bio->bi_sector;
+
+	return nsecs;
+}
+
 void
 blktap_ring_submit_request(struct blktap *tap,
 			   struct blktap_request *request)
@@ -305,6 +319,12 @@ blktap_ring_submit_request(struct blktap *tap,
 		tap->stats.st_fl_req++;
 		break;
 
+	case BLKTAP_OP_TRIM:
+		nsecs = blktap_ring_make_tr_request(tap, request, breq);
+
+		tap->stats.st_tr_sect += nsecs;
+		tap->stats.st_tr_req++;
+		break;
 	default:
 		BUG();
 	}
@@ -454,6 +474,8 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 		mask  = BLKTAP_DEVICE_FLAG_RO;
 		mask |= BLKTAP_DEVICE_FLAG_PSZ;
 		mask |= BLKTAP_DEVICE_FLAG_FLUSH;
+		mask |= BLKTAP_DEVICE_FLAG_TRIM;
+		mask |= BLKTAP_DEVICE_FLAG_TRIM_RZ;
 
 		memset(&info, 0, sizeof(info));
 		sz = base_sz = BLKTAP_INFO_SIZE_AT(flags);
@@ -463,6 +485,9 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 
 		if ((info.flags & BLKTAP_DEVICE_FLAG_PSZ) != 0)
 			sz = BLKTAP_INFO_SIZE_AT(phys_block_offset);
+
+		if (info.flags & BLKTAP_DEVICE_FLAG_TRIM)
+			sz = BLKTAP_INFO_SIZE_AT(trim_block_offset);
 
 		if (sz > base_sz)
 			if (copy_from_user(&info, ptr, sz))
