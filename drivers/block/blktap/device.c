@@ -319,9 +319,7 @@ blktap_device_configure(struct blktap *tap,
 
 	/* Enable cache control */
 	if (info->flags & BLKTAP_DEVICE_FLAG_FLUSH)
-		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN_FLUSH);
-	else
-		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN);
+		blk_queue_flush(rq, REQ_FLUSH);
 
 	/* Block discards */
 	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {
@@ -540,14 +538,14 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 
 	dev_info(disk_to_dev(gd),
 		 "sector-size: %u/%u+%u capacity: %llu"
-		 " discard: %u+%u ordered: %#x\n",
+		 " discard: %u+%u flush: %#x\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
 		 queue_alignment_offset(rq),
 		 (unsigned long long)get_capacity(gd),
 		 rq->limits.discard_granularity,
 		 queue_discard_alignment(rq),
-		 rq->ordered);
+		 rq->flush_flags);
 
 	return 0;
 
