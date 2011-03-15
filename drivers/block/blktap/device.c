@@ -162,15 +162,6 @@ blktap_device_end_request(struct blktap *tap,
 	blktap_end_rq(rq, error);
 }
 
-static void
-blktap_device_prepare_flush(struct request_queue *q, struct request *rq)
-{
-	rq->cmd_type = REQ_TYPE_BLOCK_PC;
-	rq->timeout  = q->rq_timeout;
-	rq->cmd[0]   = BLKTAP_OP_FLUSH;
-	rq->cmd_len  = 1;
-}
-
 int
 blktap_device_make_request(struct blktap *tap, struct request *rq)
 {
@@ -190,18 +181,18 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 		goto fail;
 	}
 
-	if (blk_pc_request(rq)) {
-		request->operation = rq->cmd[0];
-		request->nr_pages  = 0;
-		goto submit;
-	}
-
-	if (!blk_fs_request(rq)) {
+	if (rq->cmd_type != REQ_TYPE_FS) {
 		err = -EOPNOTSUPP;
 		goto fail;
 	}
 
-	if (blk_discard_rq(rq)) {
+	if (rq->cmd_flags & REQ_FLUSH) {
+		request->operation = BLKTAP_OP_FLUSH;
+		request->nr_pages  = 0;
+		goto submit;
+	}
+
+	if (rq->cmd_flags & REQ_DISCARD) {
 		request->operation = BLKTAP_OP_TRIM;
 		request->nr_pages  = 0;
 		goto submit;
@@ -310,7 +301,6 @@ blktap_device_configure(struct blktap *tap,
 	set_disk_ro(gd, !!(info->flags & BLKTAP_DEVICE_FLAG_RO));
 
 	blk_queue_logical_block_size(rq, info->sector_size);
-	blk_queue_max_sectors(rq, 512);
 
 	/* Hard sector size and alignment in hardware */
 	blk_queue_physical_block_size(rq, info->phys_block_size);
@@ -321,18 +311,17 @@ blktap_device_configure(struct blktap *tap,
 	blk_queue_max_segment_size(rq, PAGE_SIZE);
 
 	/* Ensure a merged request will fit in a single I/O ring slot. */
-	blk_queue_max_phys_segments(rq, BLKTAP_SEGMENT_MAX);
-	blk_queue_max_hw_segments(rq, BLKTAP_SEGMENT_MAX);
+	blk_queue_max_segments(rq, BLKTAP_SEGMENT_MAX);
+	blk_queue_max_segment_size(rq, PAGE_SIZE);
 
 	/* Make sure buffer addresses are sector-aligned. */
 	blk_queue_dma_alignment(rq, 511);
 
 	/* Enable cache control */
 	if (info->flags & BLKTAP_DEVICE_FLAG_FLUSH)
-		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN_FLUSH,
-				  blktap_device_prepare_flush);
+		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN_FLUSH);
 	else
-		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN, NULL);
+		blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN);
 
 	/* Block discards */
 	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {

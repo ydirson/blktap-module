@@ -121,8 +121,8 @@ blktap_control_destroy_tap(struct blktap *tap)
 	return 0;
 }
 
-static int
-blktap_control_ioctl(struct inode *inode, struct file *filp,
+static long
+blktap_control_ioctl(struct file *filp,
 		     unsigned int cmd, unsigned long arg)
 {
 	struct blktap *tap;
@@ -166,8 +166,8 @@ blktap_control_ioctl(struct inode *inode, struct file *filp,
 }
 
 static struct file_operations blktap_control_file_operations = {
-	.owner    = THIS_MODULE,
-	.ioctl    = blktap_control_ioctl,
+	.owner          = THIS_MODULE,
+	.unlocked_ioctl = blktap_control_ioctl,
 };
 
 static struct miscdevice blktap_control = {
