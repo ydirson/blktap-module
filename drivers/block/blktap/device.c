@@ -577,10 +577,8 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 		      queue_logical_block_size(q));
 
 	s += snprintf(s, end - s,
-		      "queue flags:%#lx plugged:%d stopped:%d empty:%d\n",
-		      q->queue_flags,
-		      blk_queue_plugged(q), blk_queue_stopped(q),
-		      elv_queue_empty(q));
+		      "queue flags:%#lx stopped:%d\n",
+		      q->queue_flags, blk_queue_stopped(q));
 
 	bdev = bdget_disk(disk, 0);
 	if (bdev) {
