@@ -124,6 +124,7 @@ __blktap_dequeue_rq(struct request *rq)
 static inline void
 __blktap_end_queued_rq(struct request *rq, int err)
 {
+	rq->cmd_flags |= REQ_QUIET;
 	blk_start_request(rq);
 	__blk_end_request(rq, err, blk_rq_bytes(rq));
 }
@@ -495,6 +496,10 @@ blktap_device_destroy(struct blktap *tap)
 	tapdev->gd = NULL;
 
 	clear_bit(BLKTAP_DEVICE, &tap->dev_inuse);
+
+	if (test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
+		blktap_control_destroy_tap(tap);
+
 	err = 0;
 out:
 	mutex_unlock(&bdev->bd_mutex);
@@ -524,7 +529,7 @@ blktap_device_fail_queue(struct blktap *tap)
 	spin_unlock_irq(&tapdev->lock);
 }
 
-static int
+int
 blktap_device_try_destroy(struct blktap *tap)
 {
 	int err;
@@ -534,13 +539,6 @@ blktap_device_try_destroy(struct blktap *tap)
 		blktap_device_fail_queue(tap);
 
 	return err;
-}
-
-void
-blktap_device_destroy_sync(struct blktap *tap)
-{
-	wait_event(tap->ring.poll_wait,
-		   !blktap_device_try_destroy(tap));
 }
 
 int

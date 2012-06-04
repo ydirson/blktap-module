@@ -117,6 +117,7 @@ blktap_ring_fail_pending(struct blktap *tap)
 		if (!request)
 			continue;
 
+		request->rq->cmd_flags |= REQ_QUIET;
 		blktap_device_end_request(tap, request, -EIO);
 	}
 }
@@ -359,17 +360,26 @@ blktap_ring_open(struct inode *inode, struct file *filp)
 	return 0;
 }
 
+static void
+blktap_destroy_work(struct work_struct *work)
+{
+        struct blktap *tap
+                = container_of(work, struct blktap, destroy_work);
+
+	wait_event(tap->ring.poll_wait, !blktap_device_try_destroy(tap));
+}
+
 static int
 blktap_ring_release(struct inode *inode, struct file *filp)
 {
 	struct blktap *tap = filp->private_data;
 
-	blktap_device_destroy_sync(tap);
-
 	tap->ring.task = NULL;
 
-	if (test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
-		blktap_control_destroy_tap(tap);
+	if (blktap_device_try_destroy(tap)) {
+		INIT_WORK(&tap->destroy_work, blktap_destroy_work);
+		schedule_work(&tap->destroy_work);
+	}
 
 	return 0;
 }
@@ -692,7 +702,7 @@ blktap_ring_destroy(struct blktap *tap)
 {
 	struct blktap_ring *ring = &tap->ring;
 
-	if (ring->task || ring->vma)
+	if (ring->task || ring->vma || test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
 		return -EBUSY;
 
 	return 0;

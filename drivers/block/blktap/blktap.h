@@ -109,6 +109,7 @@ struct blktap {
 
 	wait_queue_head_t              remove_wait;
 	struct work_struct             remove_work;
+	struct work_struct             destroy_work;
 	char                           name[BLKTAP_NAME_MAX];
 
 	struct blktap_statistics       stats;
@@ -154,9 +155,9 @@ size_t blktap_device_debug(struct blktap *, char *, size_t);
 int blktap_device_create(struct blktap *, struct blktap_device_info *);
 void blktap_device_configure(struct blktap *tap, struct blktap_device_info *info);
 int blktap_device_destroy(struct blktap *);
+int blktap_device_try_destroy(struct blktap *tap);
 int blktap_device_pause(struct blktap *);
 int blktap_device_resume(struct blktap *tap);
-void blktap_device_destroy_sync(struct blktap *);
 void blktap_device_run_queue(struct blktap *);
 void blktap_device_end_request(struct blktap *, struct blktap_request *, int);
 
