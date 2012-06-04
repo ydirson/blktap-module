@@ -113,10 +113,49 @@ blktap_control_destroy_tap(struct blktap *tap)
 		return err;
 
 	kobject_put(&tap->pool->kobj);
-
+	
 	blktap_sysfs_destroy(tap);
 
 	blktap_control_put_minor(tap);
+	return err;
+}
+
+static void
+blktap_control_remove_work(struct work_struct *work)
+{
+        struct blktap *tap
+                = container_of(work, struct blktap, remove_work);
+        blktap_control_destroy_tap(tap);
+}
+
+static int
+blktap_control_destroy_tap_ioctl(int minor)
+{
+	struct blktap *tap;
+	struct blktap_ring *ring;
+
+	tap = blktaps[minor];
+	if (!tap)
+		return -ENODEV;
+
+	ring = &tap->ring;
+
+        wait_event_interruptible(tap->remove_wait, !ring->n_pending);
+        if (ring->n_pending)
+                return -EAGAIN;
+
+	if (test_and_set_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
+		return 0;
+
+        if (tap->ring.vma) {
+                struct blktap_sring *sring = ring->ring.sring;
+
+                *BLKTAP_RING_MESSAGE(sring) = BLKTAP_RING_MESSAGE_CLOSE;
+                blktap_ring_kick_user(tap);
+        } else {
+		INIT_WORK(&tap->remove_work, blktap_control_remove_work);
+		schedule_work(&tap->remove_work);
+        }
 
 	return 0;
 }
@@ -154,11 +193,7 @@ blktap_control_ioctl(struct file *filp,
 		if (minor > MAX_BLKTAP_DEVICE)
 			return -EINVAL;
 
-		tap = blktaps[minor];
-		if (!tap)
-			return -ENODEV;
-
-		return blktap_control_destroy_tap(tap);
+		return blktap_control_destroy_tap_ioctl(minor);
 	}
 	}
 
