@@ -290,6 +290,29 @@ blktap_device_do_request(struct request_queue *rq)
 }
 
 static void
+blktap_device_restart(struct blktap *tap)
+{
+        struct blktap_device *dev;
+
+        dev = &tap->device;
+
+        spin_lock_irq(&dev->lock);
+
+        /* Re-enable calldowns. */
+        if (dev->gd) {
+                struct request_queue *rq = dev->gd->queue;
+
+                if (blk_queue_stopped(rq))
+                        blk_start_queue(rq);
+
+                /* Kick things off immediately. */
+                blktap_device_do_request(rq);
+        }
+
+        spin_unlock_irq(&dev->lock);
+}
+
+void
 blktap_device_configure(struct blktap *tap,
 			struct blktap_device_info *info)
 {
@@ -391,6 +414,49 @@ fail:
 		info->trim_block_size, info->trim_block_offset,
 		info->flags);
 	return -EINVAL;
+}
+
+int
+blktap_device_resume(struct blktap *tap)
+{
+	int err;
+
+	if (!test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
+		return -ENODEV;
+
+	if (!test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
+		return 0;
+
+	err = blktap_ring_resume(tap);
+	if (err)
+		return err;
+
+	BTDBG("restarting device\n");
+	blktap_device_restart(tap);
+
+        return 0;
+}
+
+int
+blktap_device_pause(struct blktap *tap)
+{
+	unsigned long flags;
+	struct blktap_device *dev = &tap->device;
+
+	if (!test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
+		return -ENODEV;
+
+	if (test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
+		return 0;
+
+	spin_lock_irqsave(&dev->lock, flags);
+
+	blk_stop_queue(dev->gd->queue);
+	set_bit(BLKTAP_PAUSE_REQUESTED, &tap->dev_inuse);
+
+	spin_unlock_irqrestore(&dev->lock, flags);
+
+	return blktap_ring_pause(tap);
 }
 
 int

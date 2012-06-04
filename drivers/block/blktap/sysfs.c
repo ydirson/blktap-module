@@ -93,6 +93,67 @@ wait:
 static DEVICE_ATTR(remove, S_IWUSR, NULL, blktap_sysfs_remove_device);
 
 static ssize_t
+blktap_sysfs_pause_device(struct device *dev, struct device_attribute *attr,
+                          const char *buf, size_t size)
+{
+        int err;
+        struct blktap *tap = dev_get_drvdata(dev);
+
+        BTDBG("pausing %u:%u: dev_inuse: %lu\n",
+              MAJOR(tap->ring.devno), MINOR(tap->ring.devno), tap->dev_inuse);
+
+        if (!tap->ring.dev ||
+            test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse)) {
+                err = -ENODEV;
+                goto out;
+        }
+
+        if (test_bit(BLKTAP_PAUSE_REQUESTED, &tap->dev_inuse)) {
+                err = -EBUSY;
+                goto out;
+        }
+
+        if (test_bit(BLKTAP_PAUSED, &tap->dev_inuse)) {
+                err = 0;
+                goto out;
+        }
+
+        err = blktap_device_pause(tap);
+
+out:
+
+        return (err ? err : size);
+}
+static DEVICE_ATTR(pause, S_IWUSR, NULL, blktap_sysfs_pause_device);
+
+static ssize_t
+blktap_sysfs_resume_device(struct device *dev, struct device_attribute *attr,
+                           const char *buf, size_t size)
+{
+	int err;
+	struct blktap *tap = dev_get_drvdata(dev);
+
+	if (!tap->ring.dev ||
+            test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse)) {
+		err = -ENODEV;
+		goto out;
+        }
+
+	if (!test_bit(BLKTAP_PAUSED, &tap->dev_inuse)) {
+		err = -EINVAL;
+		goto out;
+        }
+
+	err = blktap_device_resume(tap);
+
+out:
+
+	BTDBG("returning %d\n", (err ? err : (int)size));
+	return (err ? err : size);
+}
+static DEVICE_ATTR(resume, S_IWUSR, NULL, blktap_sysfs_resume_device);
+
+static ssize_t
 blktap_sysfs_debug_device(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct blktap *tap;
@@ -180,6 +241,10 @@ blktap_sysfs_create(struct blktap *tap)
 		err = device_create_file(dev, &dev_attr_name);
 	if (!err)
 		err = device_create_file(dev, &dev_attr_remove);
+	if (!err)
+		err = device_create_file(dev, &dev_attr_pause);
+	if (!err)
+		err = device_create_file(dev, &dev_attr_resume);
 	if (!err)
 		err = device_create_file(dev, &dev_attr_debug);
 	if (!err)

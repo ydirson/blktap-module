@@ -28,10 +28,15 @@ extern int blktap_device_major;
 
 #define BLKTAP_DEVICE                4
 #define BLKTAP_DEVICE_CLOSED         5
+#define BLKTAP_PAUSE_REQUESTED       6
+#define BLKTAP_PAUSED                7
 #define BLKTAP_SHUTDOWN_REQUESTED    8
 
 #define BLKTAP_REQUEST_FREE          0
 #define BLKTAP_REQUEST_PENDING       1
+
+#define BLKTAP2_RING_MESSAGE_PAUSE   1
+#define BLKTAP2_RING_MESSAGE_RESUME  2
 
 struct blktap_device {
 	spinlock_t                     lock;
@@ -47,6 +52,8 @@ struct blktap_ring {
 	struct blktap_front_ring       ring;
 	unsigned long                  ring_vstart;
 	unsigned long                  user_vstart;
+
+	int                            response;
 
 	int                            n_pending;
 	struct blktap_request         *pending[BLKTAP_RING_SIZE];
@@ -126,13 +133,14 @@ void blktap_ring_exit(void);
 size_t blktap_ring_debug(struct blktap *, char *, size_t);
 int blktap_ring_create(struct blktap *);
 int blktap_ring_destroy(struct blktap *);
+int blktap_ring_pause(struct blktap *);
+int blktap_ring_resume(struct blktap *);
 struct blktap_request *blktap_ring_make_request(struct blktap *);
 void blktap_ring_free_request(struct blktap *,struct blktap_request *);
 void blktap_ring_submit_request(struct blktap *, struct blktap_request *);
 int blktap_ring_map_request_segment(struct blktap *, struct blktap_request *, int);
 int blktap_ring_map_request(struct blktap *, struct blktap_request *);
 void blktap_ring_unmap_request(struct blktap *, struct blktap_request *);
-void blktap_ring_set_message(struct blktap *, int);
 void blktap_ring_kick_user(struct blktap *);
 
 int blktap_sysfs_init(void);
@@ -144,7 +152,10 @@ int blktap_device_init(void);
 void blktap_device_exit(void);
 size_t blktap_device_debug(struct blktap *, char *, size_t);
 int blktap_device_create(struct blktap *, struct blktap_device_info *);
+void blktap_device_configure(struct blktap *tap, struct blktap_device_info *info);
 int blktap_device_destroy(struct blktap *);
+int blktap_device_pause(struct blktap *);
+int blktap_device_resume(struct blktap *tap);
 void blktap_device_destroy_sync(struct blktap *);
 void blktap_device_run_queue(struct blktap *);
 void blktap_device_end_request(struct blktap *, struct blktap_request *, int);
