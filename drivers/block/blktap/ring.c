@@ -75,7 +75,7 @@ blktap_read_ring(struct blktap *tap)
 	struct blktap_ring_response rsp;
 	RING_IDX rc, rp;
 
-	down_read(&current->mm->mmap_sem);
+	down_write(&current->mm->mmap_sem);
 	if (!ring->vma) {
 		up_read(&current->mm->mmap_sem);
 		return;
@@ -92,7 +92,7 @@ blktap_read_ring(struct blktap *tap)
 
 	ring->ring.rsp_cons = rc;
 
-	up_read(&current->mm->mmap_sem);
+	up_write(&current->mm->mmap_sem);
 }
 
 #define MMAP_VADDR(_start, _req, _seg)				\
