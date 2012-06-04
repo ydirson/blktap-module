@@ -3,6 +3,7 @@
 #include <linux/cdrom.h>
 #include <linux/hdreg.h>
 #include <linux/log2.h>
+#include <linux/export.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_ioctl.h>
 

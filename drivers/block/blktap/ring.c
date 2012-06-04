@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 #include <linux/poll.h>
 #include <linux/blkdev.h>
+#include <linux/export.h>
 
 #include "blktap.h"
 
