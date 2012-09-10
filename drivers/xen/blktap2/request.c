@@ -3,7 +3,6 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/device.h>
-#include <linux/slab.h>
 
 #include "blktap.h"
 
@@ -22,6 +21,7 @@
 #define POOL_MIN_REQS            BLKTAP_RING_SIZE
 
 static struct kset *pool_set;
+static DEFINE_MUTEX(pool_set_mutex);
 
 #define kobj_to_pool(_kobj) \
 	container_of(_kobj, struct blktap_page_pool, kobj)
@@ -29,10 +29,12 @@ static struct kset *pool_set;
 static struct kmem_cache *request_cache;
 static mempool_t *request_pool;
 
-static void
+void
 __page_pool_wake(struct blktap_page_pool *pool)
 {
-	mempool_t *mem = pool->bufs;
+	struct blktap *tap = NULL;
+
+	spin_lock(&pool->lock);
 
 	/*
 	  NB. slightly wasteful to always wait for a full segment
@@ -41,8 +43,32 @@ __page_pool_wake(struct blktap_page_pool *pool)
 	  alloc/release cycles would otherwise keep everyone spinning.
 	*/
 
-	if (mem->curr_nr >= POOL_MAX_REQUEST_PAGES)
-		wake_up(&pool->wait);
+	if (pool->bufs->curr_nr >= POOL_MAX_REQUEST_PAGES
+	    && !list_empty(&pool->waiters)) {
+		tap = list_first_entry(&pool->waiters, struct blktap, node);
+		list_del_init(&tap->node);
+	}
+
+	spin_unlock(&pool->lock);
+
+	/*
+	 * We have to drop the pool lock here or
+	 * blktap_device_start_queue() will deadlock.
+	 *
+	 * tap is deleted from the pool waiters list above so a
+	 * another __page_pool_wake() call will wake a different
+	 * process.
+	 *
+	 * blktap_device_stop_queue() may also be called again, so
+	 * blktap_device_start_queue() also deletes the tap from
+	 * pool->waiters.
+	 */
+
+	if (tap) {
+		spin_lock_irq(&tap->device.lock);
+		blktap_device_start_queue(tap);
+		spin_unlock_irq(&tap->device.lock);
+	}
 }
 
 int
@@ -193,7 +219,7 @@ blktap_page_pool_show_size(struct blktap_page_pool *pool,
 			   char *buf)
 {
 	mempool_t *mem = pool->bufs;
-	return sprintf(buf, "%d", mem->min_nr);
+	return sprintf(buf, "%d\n", mem->min_nr);
 }
 
 static ssize_t
@@ -225,7 +251,7 @@ blktap_page_pool_show_free(struct blktap_page_pool *pool,
 			   char *buf)
 {
 	mempool_t *mem = pool->bufs;
-	return sprintf(buf, "%d", mem->curr_nr);
+	return sprintf(buf, "%d\n", mem->curr_nr);
 }
 
 static struct pool_attribute blktap_page_pool_attr_free =
@@ -336,7 +362,7 @@ blktap_page_pool_create(const char *name, int nr_pages)
 		goto fail;
 
 	spin_lock_init(&pool->lock);
-	init_waitqueue_head(&pool->wait);
+	INIT_LIST_HEAD(&pool->waiters);
 
 	pool->bufs = mempool_create(nr_pages,
 				    __mempool_page_alloc, __mempool_page_free,
@@ -366,10 +392,15 @@ blktap_page_pool_get(const char *name)
 {
 	struct kobject *kobj;
 
+	mutex_lock(&pool_set_mutex);
+
 	kobj = __blktap_kset_find_obj(pool_set, name);
 	if (!kobj)
 		kobj = blktap_page_pool_create(name,
 					       POOL_DEFAULT_PAGES);
+
+	mutex_unlock(&pool_set_mutex);
+
 	if (!kobj)
 		return ERR_PTR(-ENOMEM);
 

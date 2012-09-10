@@ -33,6 +33,8 @@ extern int blktap_device_major;
 #define BLKTAP_REQUEST_FREE          0
 #define BLKTAP_REQUEST_PENDING       1
 
+#define BLKTAP_BIO_POOL_SIZE         2
+
 struct blktap_device {
 	spinlock_t                     lock;
 	struct gendisk                *gd;
@@ -44,7 +46,7 @@ struct blktap_ring {
 	struct task_struct            *task;
 
 	struct vm_area_struct         *vma;
-	struct blktap_front_ring       ring;
+	blktap_front_ring_t            ring;
 	unsigned long                  ring_vstart;
 	unsigned long                  user_vstart;
 
@@ -97,6 +99,12 @@ struct blktap {
 	struct blktap_ring             ring;
 	struct blktap_device           device;
 	struct blktap_page_pool       *pool;
+	struct io_context             *ioc;
+
+	/* device_mutex protects the block device create/destroy. */
+	struct mutex                   device_mutex;
+
+	struct list_head               node;
 
 	wait_queue_head_t              remove_wait;
 	struct work_struct             remove_work;
@@ -109,7 +117,7 @@ struct blktap_page_pool {
 	struct mempool_s              *bufs;
 	spinlock_t                     lock;
 	struct kobject                 kobj;
-	wait_queue_head_t              wait;
+	struct list_head               waiters;
 };
 
 extern struct mutex blktap_lock;
@@ -146,6 +154,7 @@ int blktap_device_destroy(struct blktap *);
 void blktap_device_destroy_sync(struct blktap *);
 void blktap_device_run_queue(struct blktap *);
 void blktap_device_end_request(struct blktap *, struct blktap_request *, int);
+void blktap_device_start_queue(struct blktap *tap);
 
 int blktap_page_pool_init(struct kobject *);
 void blktap_page_pool_exit(void);
@@ -156,6 +165,9 @@ struct blktap_request *blktap_request_alloc(struct blktap *);
 int blktap_request_get_pages(struct blktap *, struct blktap_request *, int);
 void blktap_request_free(struct blktap *, struct blktap_request *);
 void blktap_request_bounce(struct blktap *, struct blktap_request *, int, int);
+void __page_pool_wake(struct blktap_page_pool *pool);
 
+int blktap_ioctx_attach(struct blktap *, int);
+void blktap_ioctx_detach(struct blktap *);
 
 #endif

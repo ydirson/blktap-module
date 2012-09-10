@@ -2,7 +2,6 @@
 #include <linux/blkdev.h>
 #include <linux/cdrom.h>
 #include <linux/hdreg.h>
-#include <linux/log2.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_ioctl.h>
 
@@ -11,6 +10,39 @@
 int blktap_device_major;
 
 #define dev_to_blktap(_dev) container_of(_dev, struct blktap, device)
+
+/* Call with tap->device.lock held. */
+static void blktap_device_stop_queue(struct blktap *tap)
+{
+	struct blktap_page_pool *pool = tap->pool;
+
+	spin_lock(&pool->lock);
+
+	/*
+	 * If this tap is already in the list of waiters, the queue is
+	 * already stopped.  This can happen if userspace is woken
+	 * early by a signal.
+	 */
+	if (list_empty(&tap->node)) {
+		list_add_tail(&tap->node, &pool->waiters);
+		blk_stop_queue(tap->device.gd->queue);
+	}
+
+	spin_unlock(&pool->lock);
+}
+
+/* Call with tap->device.lock held. */
+void blktap_device_start_queue(struct blktap *tap)
+{
+	struct blktap_page_pool *pool = tap->pool;
+
+	spin_lock(&pool->lock);
+
+	list_del_init(&tap->node);
+	blk_start_queue(tap->device.gd->queue);
+
+	spin_unlock(&pool->lock);
+}
 
 static int
 blktap_device_open(struct block_device *bdev, fmode_t mode)
@@ -255,7 +287,7 @@ blktap_device_run_queue(struct blktap *tap)
 		spin_lock_irq(&tapdev->lock);
 
 		if (err == -EBUSY) {
-			blk_stop_queue(q);
+			blktap_device_stop_queue(tap);
 			break;
 		}
 
@@ -286,10 +318,11 @@ blktap_device_configure(struct blktap *tap,
 	struct request_queue *rq = gd->queue;
 
 	set_capacity(gd, info->capacity);
-	set_disk_ro(gd, !!(info->flags & BLKTAP_DEVICE_FLAG_RO));
+	set_disk_ro(gd, !!(info->flags & BLKTAP_DEVICE_RO));
 
 	/* Hard sector size and max sectors impersonate the equiv. hardware. */
 	blk_queue_logical_block_size(rq, info->sector_size);
+	blk_queue_physical_block_size(rq, info->physical_sector_size);
 	blk_queue_max_sectors(rq, 512);
 
 	/* Each segment in a request is up to an aligned page in size. */
@@ -312,27 +345,34 @@ blktap_device_validate_info(struct blktap *tap,
 			    struct blktap_device_info *info)
 {
 	struct device *dev = tap->ring.dev;
+	int sector_order;
 
-	/* sector size is is 2^(n >= 9) */
-	if (info->sector_size < 512 ||
-	    !is_power_of_2(info->sector_size))
+	sector_order = ffs(info->sector_size) - 1;
+	if (sector_order <  9 ||
+	    sector_order > 12 ||
+	    info->sector_size != 1U<<sector_order)
 		goto fail;
 
-	/* make sure capacity won't overflow */
 	if (!info->capacity ||
-	    info->capacity > ULLONG_MAX >> ilog2(info->sector_size))
+	    (info->capacity > ULLONG_MAX >> sector_order))
+		goto fail;
+
+	sector_order = ffs(info->physical_sector_size) - 1;
+	if (sector_order <  9 ||
+	    info->physical_sector_size != 1U<<sector_order)
 		goto fail;
 
 	return 0;
 
 fail:
-	dev_err(dev, "capacity: %llu, sector-size: %u\n",
-		info->capacity, info->sector_size);
+	dev_err(dev, "capacity: %llu, sector-size: %u/%u\n",
+		info->capacity,
+		info->sector_size, info->physical_sector_size);
 	return -EINVAL;
 }
 
 int
-blktap_device_destroy(struct blktap *tap)
+__blktap_device_destroy(struct blktap *tap)
 {
 	struct blktap_device *tapdev = &tap->device;
 	struct block_device *bdev;
@@ -358,10 +398,26 @@ blktap_device_destroy(struct blktap *tap)
 		goto out;
 	}
 
+	/*
+	 * This tap's queue may be been stopped. Remove ourselves from
+	 * the list of pool waiters.
+	 */
+	spin_lock(&tap->pool->lock);
+	list_del_init(&tap->node);
+	spin_unlock(&tap->pool->lock);
+
+	/*
+	 * Another tapdisk might have tried to wake us during teardown
+	 * so try and wake another tapdisk.
+	 */
+	__page_pool_wake(tap->pool);
+
 	del_gendisk(gd);
 	gd->private_data = NULL;
 
 	blk_cleanup_queue(gd->queue);
+
+	blktap_ioctx_detach(tap);
 
 	put_disk(gd);
 	tapdev->gd = NULL;
@@ -374,6 +430,18 @@ out_nolock:
 	bdput(bdev);
 
 	return err;
+}
+
+int
+blktap_device_destroy(struct blktap *tap)
+{
+	int ret;
+
+	mutex_lock(&tap->device_mutex);
+	ret = __blktap_device_destroy(tap);
+	mutex_unlock(&tap->device_mutex);
+
+	return ret;
 }
 
 static void
@@ -401,9 +469,13 @@ blktap_device_try_destroy(struct blktap *tap)
 {
 	int err;
 
-	err = blktap_device_destroy(tap);
+	mutex_lock(&tap->device_mutex);
+
+	err = __blktap_device_destroy(tap);
 	if (err)
 		blktap_device_fail_queue(tap);
+
+	mutex_unlock(&tap->device_mutex);
 
 	return err;
 }
@@ -416,7 +488,7 @@ blktap_device_destroy_sync(struct blktap *tap)
 }
 
 int
-blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
+__blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 {
 	int minor, err;
 	struct gendisk *gd;
@@ -464,6 +536,11 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		err = -ENOMEM;
 		goto fail;
 	}
+
+	err = blktap_ioctx_attach(tap, rq->node);
+	if (err)
+		goto fail;
+
 	elevator_init(rq, "noop");
 
 	gd->queue     = rq;
@@ -478,11 +555,13 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	dev_info(disk_to_dev(gd), "sector-size: %u/%u capacity: %llu\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
-		 (unsigned long long)get_capacity(gd));
+		 get_capacity(gd));
 
 	return 0;
 
 fail:
+	blktap_ioctx_detach(tap);
+
 	if (gd)
 		del_gendisk(gd);
 	if (rq)
@@ -490,6 +569,19 @@ fail:
 
 	return err;
 }
+
+int
+blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
+{
+	int ret;
+
+	mutex_lock(&tap->device_mutex);
+	ret = __blktap_device_create(tap, info);
+	mutex_unlock(&tap->device_mutex);
+
+	return ret;
+}
+
 
 size_t
 blktap_device_debug(struct blktap *tap, char *buf, size_t size)
@@ -506,8 +598,7 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 
 	s += snprintf(s, end - s,
 		      "disk capacity:%llu sector size:%u\n",
-		      (unsigned long long)get_capacity(disk),
-		      queue_logical_block_size(q));
+		      get_capacity(disk), queue_logical_block_size(q));
 
 	s += snprintf(s, end - s,
 		      "queue flags:%#lx plugged:%d stopped:%d empty:%d\n",

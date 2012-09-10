@@ -75,8 +75,8 @@ blktap_sysfs_remove_device(struct device *dev,
 		goto wait;
 
 	if (tap->ring.vma) {
-		struct blktap_sring *sring = tap->ring.ring.sring;
-		*BLKTAP_RING_MESSAGE(sring) = BLKTAP_RING_MESSAGE_CLOSE;
+		blktap_sring_t *sring = tap->ring.ring.sring;
+		sring->private.tapif_user.msg = BLKTAP_RING_MESSAGE_CLOSE;
 		blktap_ring_kick_user(tap);
 	} else {
 		INIT_WORK(&tap->remove_work, blktap_sysfs_remove_work);
@@ -137,7 +137,7 @@ blktap_sysfs_show_pool(struct device *dev,
 		       char *buf)
 {
 	struct blktap *tap = dev_get_drvdata(dev);
-	return sprintf(buf, "%s", kobject_name(&tap->pool->kobj));
+	return sprintf(buf, "%s\n", kobject_name(&tap->pool->kobj));
 }
 
 static ssize_t

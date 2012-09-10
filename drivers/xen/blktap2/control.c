@@ -2,7 +2,6 @@
 #include <linux/sched.h>
 #include <linux/miscdevice.h>
 #include <linux/device.h>
-#include <linux/slab.h>
 #include <asm/uaccess.h>
 
 #include "blktap.h"
@@ -22,6 +21,9 @@ blktap_control_get_minor(void)
 	tap = kzalloc(sizeof(*tap), GFP_KERNEL);
 	if (unlikely(!tap))
 		return NULL;
+
+	mutex_init(&tap->device_mutex);
+	INIT_LIST_HEAD(&tap->node);
 
 	mutex_lock(&blktap_lock);
 
@@ -183,7 +185,7 @@ blktap_control_show_default_pool(struct device *device,
 				 struct device_attribute *attr,
 				 char *buf)
 {
-	return sprintf(buf, "%s", kobject_name(&default_pool->kobj));
+	return sprintf(buf, "%s\n", kobject_name(&default_pool->kobj));
 }
 
 static ssize_t

@@ -16,13 +16,9 @@ static struct cdev blktap_ring_cdev;
   */
 #define RING_PAGES 1
 
-#define BLKTAP_INFO_SIZE_AT(_memb)			\
-	offsetof(struct blktap_device_info, _memb) +	\
-	sizeof(((struct blktap_device_info*)0)->_memb)
-
 static void
 blktap_ring_read_response(struct blktap *tap,
-			  const struct blktap_ring_response *rsp)
+			  const blktap_ring_rsp_t *rsp)
 {
 	struct blktap_ring *ring = &tap->ring;
 	struct blktap_request *request;
@@ -71,14 +67,8 @@ static void
 blktap_read_ring(struct blktap *tap)
 {
 	struct blktap_ring *ring = &tap->ring;
-	struct blktap_ring_response rsp;
+	blktap_ring_rsp_t rsp;
 	RING_IDX rc, rp;
-
-	down_read(&current->mm->mmap_sem);
-	if (!ring->vma) {
-		up_read(&current->mm->mmap_sem);
-		return;
-	}
 
 	/* for each outstanding message on the ring  */
 	rp = ring->ring.sring->rsp_prod;
@@ -90,8 +80,6 @@ blktap_read_ring(struct blktap *tap)
 	}
 
 	ring->ring.rsp_cons = rc;
-
-	up_read(&current->mm->mmap_sem);
 }
 
 #define MMAP_VADDR(_start, _req, _seg)				\
@@ -246,7 +234,7 @@ blktap_ring_submit_request(struct blktap *tap,
 			   struct blktap_request *request)
 {
 	struct blktap_ring *ring = &tap->ring;
-	struct blktap_ring_request *breq;
+	blktap_ring_req_t *breq;
 	struct scatterlist *sg;
 	int i, nsecs = 0;
 
@@ -336,7 +324,7 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct blktap *tap = filp->private_data;
 	struct blktap_ring *ring = &tap->ring;
-	struct blktap_sring *sring;
+	blktap_sring_t *sring;
 	struct page *page = NULL;
 	int err;
 
@@ -380,9 +368,15 @@ fail:
 	return err;
 }
 
-static int
-blktap_ring_ioctl(struct inode *inode, struct file *filp,
-		  unsigned int cmd, unsigned long arg)
+static bool
+blktap_ring_vma_valid(struct blktap_ring *ring)
+{
+	/* Current process has mapped this ring? */
+	return ring->vma && ring->vma->vm_mm == current->mm;
+}
+
+static long
+__blktap_ring_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	struct blktap *tap = filp->private_data;
 	struct blktap_ring *ring = &tap->ring;
@@ -391,7 +385,7 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 
 	BTDBG("%d: cmd: %u, arg: %lu\n", tap->minor, cmd, arg);
 
-	if (!ring->vma || ring->vma->vm_mm != current->mm)
+	if (!blktap_ring_vma_valid(ring))
 		return -EACCES;
 
 	switch(cmd) {
@@ -409,6 +403,7 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 
 		info.capacity             = params.capacity;
 		info.sector_size          = params.sector_size;
+		info.physical_sector_size = params.sector_size;
 		info.flags                = 0;
 
 		err = blktap_device_create(tap, &info);
@@ -424,24 +419,9 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 	}
 
 	case BLKTAP_IOCTL_CREATE_DEVICE: {
-		struct blktap_device_info __user *ptr = (void *)arg;
 		struct blktap_device_info info;
-		unsigned long mask;
-		size_t base_sz, sz;
 
-		mask  = BLKTAP_DEVICE_FLAG_RO;
-
-		memset(&info, 0, sizeof(info));
-		sz = base_sz = BLKTAP_INFO_SIZE_AT(flags);
-
-		if (copy_from_user(&info, ptr, sz))
-			return -EFAULT;
-
-		if (sz > base_sz)
-			if (copy_from_user(&info, ptr, sz))
-				return -EFAULT;
-
-		if (put_user(info.flags & mask, &ptr->flags))
+		if (copy_from_user(&info, ptr, sizeof(info)))
 			return -EFAULT;
 
 		return blktap_device_create(tap, &info);
@@ -452,8 +432,21 @@ blktap_ring_ioctl(struct inode *inode, struct file *filp,
 		return blktap_device_destroy(tap);
 	}
 
-	return -ENOTTY;
+	return -ENOIOCTLCMD;
 }
+
+static long
+blktap_ring_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	int ret;
+
+	down_read(&current->mm->mmap_sem);
+	ret = __blktap_ring_ioctl(filp, cmd, arg);
+	up_read(&current->mm->mmap_sem);
+
+	return ret;
+}
+
 
 static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 {
@@ -461,11 +454,10 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 	struct blktap_ring *ring = &tap->ring;
 	int work;
 
-	poll_wait(filp, &tap->pool->wait, wait);
 	poll_wait(filp, &ring->poll_wait, wait);
 
 	down_read(&current->mm->mmap_sem);
-	if (ring->vma && tap->device.gd)
+	if (blktap_ring_vma_valid(ring) && tap->device.gd)
 		blktap_device_run_queue(tap);
 	up_read(&current->mm->mmap_sem);
 
@@ -473,7 +465,7 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 	RING_PUSH_REQUESTS(&ring->ring);
 
 	if (work ||
-	    *BLKTAP_RING_MESSAGE(ring->ring.sring) ||
+	    ring->ring.sring->private.tapif_user.msg ||
 	    test_and_clear_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse))
 		return POLLIN | POLLRDNORM;
 
@@ -484,7 +476,7 @@ static struct file_operations blktap_ring_file_operations = {
 	.owner    = THIS_MODULE,
 	.open     = blktap_ring_open,
 	.release  = blktap_ring_release,
-	.ioctl    = blktap_ring_ioctl,
+	.unlocked_ioctl = blktap_ring_ioctl,
 	.mmap     = blktap_ring_mmap,
 	.poll     = blktap_ring_poll,
 };

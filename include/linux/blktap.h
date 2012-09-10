@@ -16,8 +16,6 @@
 #define BLKTAP_IOCTL_CREATE_DEVICE  208
 #define BLKTAP_IOCTL_REMOVE_DEVICE  207
 
-#define BLKTAP_DEVICE_FLAG_RO       0x00000001UL /* disk is R/O */
-
 struct blktap_info {
 	unsigned int            ring_major;
 	unsigned int            bdev_major;
@@ -27,8 +25,12 @@ struct blktap_info {
 struct blktap_device_info {
 	unsigned long long      capacity;
 	unsigned int            sector_size;
+	unsigned int            physical_sector_size;
 	unsigned long           flags;
+	unsigned long           __rsvd[4];
 };
+
+#define BLKTAP_DEVICE_RO        0x00000001UL
 
 /*
  * I/O ring
@@ -39,6 +41,9 @@ struct blktap_device_info {
 #endif
 
 #include <xen/interface/io/ring.h>
+
+typedef struct blktap_ring_request  blktap_ring_req_t;
+typedef struct blktap_ring_response blktap_ring_rsp_t;
 
 struct blktap_segment {
 	uint32_t                __pad;
@@ -70,21 +75,13 @@ struct blktap_ring_response {
 	int16_t                 status;
 };
 
-DEFINE_RING_TYPES(blktap,
-		  struct blktap_ring_request,
-		  struct blktap_ring_response);
-
-#define BLKTAP_RING_SIZE						\
-	((int)__RD32((BLKTAP_PAGE_SIZE -				\
-		      (size_t)&((struct blktap_sring*)0)->ring) /	\
-		     sizeof(((struct blktap_sring *)0)->ring[0])))
+DEFINE_RING_TYPES(blktap, struct blktap_ring_request, struct blktap_ring_response);
+#define BLKTAP_RING_SIZE __CONST_RING_SIZE(blktap, BLKTAP_PAGE_SIZE)
 
 /*
  * Ring messages + old ioctls (DEPRECATED)
  */
 
-#define BLKTAP_RING_MESSAGE(_sring) \
-	((uint8_t*)(&(_sring)->rsp_event + 1))
 #define BLKTAP_RING_MESSAGE_CLOSE   3
 #define BLKTAP_IOCTL_CREATE_DEVICE_COMPAT 202
 #define BLKTAP_NAME_MAX 256
