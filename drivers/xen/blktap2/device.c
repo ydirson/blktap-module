@@ -12,11 +12,22 @@ int blktap_device_major;
 #define dev_to_blktap(_dev) container_of(_dev, struct blktap, device)
 
 /* Call with tap->device.lock held. */
-static void blktap_device_stop_queue(struct blktap *tap)
+static bool blktap_device_stop_queue(struct blktap *tap)
 {
 	struct blktap_page_pool *pool = tap->pool;
 
 	spin_lock(&pool->lock);
+
+	/*
+	 * If the ring isn't full and there are pages available, don't
+	 * stop as the queue may never get restarted.
+	 */
+	if (!RING_FULL(&tap->ring.ring)
+	    && pool->bufs->curr_nr >= BLKTAP_SEGMENT_MAX) {
+		spin_unlock(&pool->lock);
+		return false;
+	}
+
 
 	/*
 	 * If this tap is already in the list of waiters, the queue is
@@ -29,6 +40,8 @@ static void blktap_device_stop_queue(struct blktap *tap)
 	}
 
 	spin_unlock(&pool->lock);
+
+	return true;
 }
 
 /* Call with tap->device.lock held. */
@@ -287,8 +300,9 @@ blktap_device_run_queue(struct blktap *tap)
 		spin_lock_irq(&tapdev->lock);
 
 		if (err == -EBUSY) {
-			blktap_device_stop_queue(tap);
-			break;
+			if (blktap_device_stop_queue(tap))
+				break;
+			continue;
 		}
 
 		__blktap_dequeue_rq(rq);

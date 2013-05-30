@@ -8,9 +8,9 @@
 
 DEFINE_MUTEX(blktap_lock);
 
-struct blktap **blktaps;
+struct blktap **blktaps = NULL;
 int blktap_max_minor;
-static struct blktap_page_pool *default_pool;
+static struct blktap_page_pool *default_pool = NULL;
 
 static struct blktap *
 blktap_control_get_minor(void)
@@ -54,15 +54,14 @@ blktap_control_get_minor(void)
 	blktaps[minor] = tap;
 
 	__module_get(THIS_MODULE);
-out:
+
 	mutex_unlock(&blktap_lock);
 	return tap;
 
 fail:
 	mutex_unlock(&blktap_lock);
 	kfree(tap);
-	tap = NULL;
-	goto out;
+	return NULL;
 }
 
 static void
@@ -100,6 +99,7 @@ blktap_control_create_tap(void)
 fail_ring:
 	blktap_ring_destroy(tap);
 fail_tap:
+	kobject_put(&default_pool->kobj);
 	blktap_control_put_minor(tap);
 
 	return NULL;
@@ -178,7 +178,7 @@ static struct miscdevice blktap_control = {
 	.fops     = &blktap_control_file_operations,
 };
 
-static struct device *control_device;
+static struct device *control_device = NULL;
 
 static ssize_t
 blktap_control_show_default_pool(struct device *device,

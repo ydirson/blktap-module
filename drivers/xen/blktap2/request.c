@@ -20,14 +20,14 @@
 /* min request structs per pool. These grow dynamically. */
 #define POOL_MIN_REQS            BLKTAP_RING_SIZE
 
-static struct kset *pool_set;
+static struct kset *pool_set = NULL;
 static DEFINE_MUTEX(pool_set_mutex);
 
 #define kobj_to_pool(_kobj) \
 	container_of(_kobj, struct blktap_page_pool, kobj)
 
-static struct kmem_cache *request_cache;
-static mempool_t *request_pool;
+static struct kmem_cache *request_cache = NULL;
+static mempool_t *request_pool = NULL;
 
 void
 __page_pool_wake(struct blktap_page_pool *pool)

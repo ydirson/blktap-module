@@ -9,7 +9,7 @@
 
 int blktap_debug_level = 1;
 
-static struct class *class;
+static struct class *class = NULL;
 
 static ssize_t
 blktap_sysfs_set_name(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
