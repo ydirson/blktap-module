@@ -24,8 +24,7 @@ extern int blktap_device_major;
 #define BTWARN(_f, _a...)            BTPRINTK(0, KERN_WARNING, 0, _f, ##_a)
 #define BTERR(_f, _a...)             BTPRINTK(0, KERN_ERR, 0, _f, ##_a)
 
-#define MAX_BLKTAP_DEVICE            1024
-
+#define MAX_BLKTAP_DEVICE            2048
 #define BLKTAP_DEVICE                4
 #define BLKTAP_DEVICE_CLOSED         5
 #define BLKTAP_SHUTDOWN_REQUESTED    8
