@@ -140,9 +140,16 @@ blktap_control_destroy_tap_ioctl(int minor)
 
 	ring = &tap->ring;
 
-        wait_event_interruptible(tap->remove_wait, !ring->n_pending);
-        if (ring->n_pending)
-                return -EAGAIN;
+	for (;;) {
+		int r;
+
+		r = wait_event_interruptible_timeout(tap->remove_wait,
+						     !ring->n_pending, HZ / 10);
+		if (r == -ERESTARTSYS)
+			return -EAGAIN;
+		if (r > 0)
+			break;
+	}
 
 	if (test_and_set_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
 		return 0;

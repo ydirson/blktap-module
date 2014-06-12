@@ -8,6 +8,8 @@
 
 #include "blktap.h"
 
+#define BLKTAP_DESTROY_RETRY_PERIOD (HZ/10) /*100 msec*/
+
 int blktap_ring_major;
 static struct cdev blktap_ring_cdev;
 
@@ -364,9 +366,11 @@ static void
 blktap_destroy_work(struct work_struct *work)
 {
         struct blktap *tap
-                = container_of(work, struct blktap, destroy_work);
+                = container_of(work, struct blktap, destroy_work.work);
 
-	wait_event(tap->ring.poll_wait, !blktap_device_try_destroy(tap));
+	if (blktap_device_try_destroy(tap)) {
+		schedule_delayed_work(&tap->destroy_work, BLKTAP_DESTROY_RETRY_PERIOD);
+	}
 }
 
 static int
@@ -377,8 +381,8 @@ blktap_ring_release(struct inode *inode, struct file *filp)
 	tap->ring.task = NULL;
 
 	if (blktap_device_try_destroy(tap)) {
-		INIT_WORK(&tap->destroy_work, blktap_destroy_work);
-		schedule_work(&tap->destroy_work);
+		INIT_DELAYED_WORK(&tap->destroy_work, blktap_destroy_work);
+		schedule_delayed_work(&tap->destroy_work, BLKTAP_DESTROY_RETRY_PERIOD);
 	}
 
 	return 0;
@@ -416,7 +420,7 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 	vma->vm_private_data = tap;
 
 	vma->vm_flags |= VM_DONTCOPY;
-	vma->vm_flags |= VM_RESERVED;
+	vma->vm_flags |= VM_DONTEXPAND | VM_DONTDUMP;
 
 	vma->vm_ops = &blktap_ring_vm_operations;
 
@@ -682,9 +686,16 @@ blktap_ring_pause(struct blktap *tap)
 		return -EINVAL;
 
 	BTDBG("draining queue\n");
-	wait_event_interruptible(tap->remove_wait, !ring->n_pending);
-	if (ring->n_pending)
-		return -EAGAIN;
+	for (;;) {
+		int r;
+
+		r = wait_event_interruptible_timeout(tap->remove_wait,
+						     !ring->n_pending, HZ / 10);
+		if (r == -ERESTARTSYS)
+			return -EAGAIN;
+		if (r > 0)
+			break;
+	}
 
 	blktap_ring_set_message(tap, BLKTAP2_RING_MESSAGE_PAUSE);
 	blktap_ring_kick_user(tap);

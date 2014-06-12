@@ -109,7 +109,7 @@ struct blktap {
 
 	wait_queue_head_t              remove_wait;
 	struct work_struct             remove_work;
-	struct work_struct             destroy_work;
+	struct delayed_work            destroy_work;
 	char                           name[BLKTAP_NAME_MAX];
 
 	struct blktap_statistics       stats;
