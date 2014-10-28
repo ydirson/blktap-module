@@ -130,7 +130,7 @@ blktap_sysfs_create(struct blktap *tap)
 	int err = 0;
 
 	dev = device_create(class, NULL, ring->devno,
-			    tap, "blktap%d", tap->minor);
+			    tap, "blktap/blktap%d", tap->minor);
 	if (IS_ERR(dev))
 		err = PTR_ERR(dev);
 	if (!err)

@@ -174,7 +174,7 @@ static struct file_operations blktap_control_file_operations = {
 
 static struct miscdevice blktap_control = {
 	.minor    = MISC_DYNAMIC_MINOR,
-	.name     = "blktap-control",
+	.name     = "blktap/control",
 	.fops     = &blktap_control_file_operations,
 };
 
