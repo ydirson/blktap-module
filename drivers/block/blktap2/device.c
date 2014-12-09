@@ -4,6 +4,7 @@
 #include <linux/hdreg.h>
 #include <scsi/scsi.h>
 #include <scsi/scsi_ioctl.h>
+#include <linux/module.h>
 
 #include "blktap.h"
 
@@ -288,7 +289,7 @@ blktap_device_run_queue(struct blktap *tap)
 		if (!rq)
 			break;
 
-		if (!blk_fs_request(rq)) {
+		if (rq->cmd_type != REQ_TYPE_FS) {
 			__blktap_end_queued_rq(rq, -EOPNOTSUPP);
 			continue;
 		}
@@ -337,21 +338,17 @@ blktap_device_configure(struct blktap *tap,
 	/* Hard sector size and max sectors impersonate the equiv. hardware. */
 	blk_queue_logical_block_size(rq, info->sector_size);
 	blk_queue_physical_block_size(rq, info->physical_sector_size);
-	blk_queue_max_sectors(rq, 512);
+	blk_queue_max_hw_sectors(rq, 512);
 
 	/* Each segment in a request is up to an aligned page in size. */
 	blk_queue_segment_boundary(rq, PAGE_SIZE - 1);
 	blk_queue_max_segment_size(rq, PAGE_SIZE);
 
 	/* Ensure a merged request will fit in a single I/O ring slot. */
-	blk_queue_max_phys_segments(rq, BLKTAP_SEGMENT_MAX);
-	blk_queue_max_hw_segments(rq, BLKTAP_SEGMENT_MAX);
+	blk_queue_max_segments(rq, BLKTAP_SEGMENT_MAX);
 
 	/* Make sure buffer addresses are sector-aligned. */
 	blk_queue_dma_alignment(rq, 511);
-
-	/* We are reordering, but cacheless. */
-	blk_queue_ordered(rq, QUEUE_ORDERED_DRAIN, NULL);
 }
 
 static int
@@ -430,8 +427,6 @@ __blktap_device_destroy(struct blktap *tap)
 	gd->private_data = NULL;
 
 	blk_cleanup_queue(gd->queue);
-
-	blktap_ioctx_detach(tap);
 
 	put_disk(gd);
 	tapdev->gd = NULL;
@@ -550,11 +545,7 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		err = -ENOMEM;
 		goto fail;
 	}
-
-	err = blktap_ioctx_attach(tap, rq->node);
-	if (err)
-		goto fail;
-
+ 
 	elevator_init(rq, "noop");
 
 	gd->queue     = rq;
@@ -574,8 +565,6 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	return 0;
 
 fail:
-	blktap_ioctx_detach(tap);
-
 	if (gd)
 		del_gendisk(gd);
 	if (rq)
@@ -615,10 +604,9 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 		      get_capacity(disk), queue_logical_block_size(q));
 
 	s += snprintf(s, end - s,
-		      "queue flags:%#lx plugged:%d stopped:%d empty:%d\n",
+		      "queue flags:%#lx stopped:%d\n",
 		      q->queue_flags,
-		      blk_queue_plugged(q), blk_queue_stopped(q),
-		      elv_queue_empty(q));
+		      blk_queue_stopped(q));
 
 	bdev = bdget_disk(disk, 0);
 	if (bdev) {

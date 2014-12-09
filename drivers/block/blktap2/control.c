@@ -2,6 +2,7 @@
 #include <linux/sched.h>
 #include <linux/miscdevice.h>
 #include <linux/device.h>
+#include <linux/slab.h>
 #include <asm/uaccess.h>
 
 #include "blktap.h"
@@ -33,22 +34,6 @@ blktap_control_get_minor(void)
 
 	if (minor == MAX_BLKTAP_DEVICE)
 		goto fail;
-
-	if (minor == blktap_max_minor) {
-		void *p;
-		int n;
-
-		n = min(2 * blktap_max_minor, MAX_BLKTAP_DEVICE);
-		p = krealloc(blktaps, n * sizeof(blktaps[0]), GFP_KERNEL);
-		if (!p)
-			goto fail;
-
-		blktaps          = p;
-		minor            = blktap_max_minor;
-		blktap_max_minor = n;
-
-		memset(&blktaps[minor], 0, (n - minor) * sizeof(blktaps[0]));
-	}
 
 	tap->minor = minor;
 	blktaps[minor] = tap;
@@ -123,9 +108,9 @@ blktap_control_destroy_tap(struct blktap *tap)
 	return 0;
 }
 
-static int
-blktap_control_ioctl(struct inode *inode, struct file *filp,
-		     unsigned int cmd, unsigned long arg)
+static long
+__blktap_control_ioctl(struct file *filp,
+		       unsigned int cmd, unsigned long arg)
 {
 	struct blktap *tap;
 
@@ -167,9 +152,24 @@ blktap_control_ioctl(struct inode *inode, struct file *filp,
 	return -ENOIOCTLCMD;
 }
 
+static DEFINE_MUTEX(blktap_control_ioctl_mutex);
+
+static long
+blktap_control_ioctl(struct file *filp,
+		     unsigned int cmd, unsigned long arg)
+{
+	int ret;
+
+	mutex_lock(&blktap_control_ioctl_mutex);
+	ret = __blktap_control_ioctl(filp, cmd, arg);
+	mutex_unlock(&blktap_control_ioctl_mutex);
+
+	return ret;
+}
+
 static struct file_operations blktap_control_file_operations = {
-	.owner    = THIS_MODULE,
-	.ioctl    = blktap_control_ioctl,
+	.owner          = THIS_MODULE,
+	.unlocked_ioctl = blktap_control_ioctl,
 };
 
 static struct miscdevice blktap_control = {
@@ -233,7 +233,7 @@ blktap_control_init(void)
 
 	control_device = blktap_control.this_device;
 
-	blktap_max_minor = min(64, MAX_BLKTAP_DEVICE);
+	blktap_max_minor = MAX_BLKTAP_DEVICE;
 	blktaps = kzalloc(blktap_max_minor * sizeof(blktaps[0]), GFP_KERNEL);
 	if (!blktaps) {
 		BTERR("failed to allocate blktap minor map");
@@ -245,8 +245,11 @@ blktap_control_init(void)
 		return err;
 
 	default_pool = blktap_page_pool_get("default");
-	if (!default_pool)
-		return -ENOMEM;
+	if (IS_ERR(default_pool)) {
+		err = PTR_ERR(default_pool);
+		default_pool = NULL;
+		return err;
+	}
 
 	err = device_create_file(control_device, &dev_attr_default_pool);
 	if (err)
