@@ -4,6 +4,7 @@
 #include <linux/sched.h>
 #include <linux/poll.h>
 #include <linux/blkdev.h>
+#include <linux/module.h>
 
 #include "blktap.h"
 
@@ -324,7 +325,7 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 {
 	struct blktap *tap = filp->private_data;
 	struct blktap_ring *ring = &tap->ring;
-	blktap_sring_t *sring;
+	struct blktap_sring *sring;
 	struct page *page = NULL;
 	int err;
 
@@ -350,8 +351,7 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 
 	vma->vm_private_data = tap;
 
-	vma->vm_flags |= VM_DONTCOPY;
-	vma->vm_flags |= VM_RESERVED;
+	vma->vm_flags |= VM_DONTCOPY | VM_DONTEXPAND | VM_DONTDUMP;
 
 	vma->vm_ops = &blktap_ring_vm_operations;
 
@@ -465,7 +465,6 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 	RING_PUSH_REQUESTS(&ring->ring);
 
 	if (work ||
-	    ring->ring.sring->private.tapif_user.msg ||
 	    test_and_clear_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse))
 		return POLLIN | POLLRDNORM;
 

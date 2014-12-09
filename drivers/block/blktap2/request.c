@@ -3,6 +3,7 @@
 #include <linux/mutex.h>
 #include <linux/sched.h>
 #include <linux/device.h>
+#include <linux/slab.h>
 
 #include "blktap.h"
 
@@ -378,9 +379,9 @@ blktap_page_pool_create(const char *name, int nr_pages)
 
 	return &pool->kobj;
 
-	kobject_del(&pool->kobj);
 fail_bufs:
-	mempool_destroy(pool->bufs);
+	kobject_put(&pool->kobj);
+	return NULL;
 fail_pool:
 	kfree(pool);
 fail:
