@@ -362,6 +362,7 @@ blktap_page_pool_create(const char *name, int nr_pages)
 	if (!pool)
 		goto fail;
 
+	atomic_set(&pool->users, 1);
 	spin_lock_init(&pool->lock);
 	INIT_LIST_HEAD(&pool->waiters);
 
@@ -388,8 +389,20 @@ fail:
 	return NULL;
 }
 
-struct blktap_page_pool*
-blktap_page_pool_get(const char *name)
+void blktap_page_pool_get(struct blktap_page_pool *pool)
+{
+	atomic_inc(&pool->users);
+}
+
+void blktap_page_pool_put(struct blktap_page_pool *pool)
+{
+	mutex_lock(&pool_set_mutex);
+	if (atomic_dec_and_test(&pool->users))
+		kobject_del(&pool->kobj);
+	mutex_unlock(&pool_set_mutex);
+}
+
+struct blktap_page_pool *blktap_page_pool_get_by_name(const char *name)
 {
 	struct kobject *kobj;
 
@@ -399,6 +412,12 @@ blktap_page_pool_get(const char *name)
 	if (!kobj)
 		kobj = blktap_page_pool_create(name,
 					       POOL_DEFAULT_PAGES);
+	else {
+		struct blktap_page_pool *pool = kobj_to_pool(kobj);
+
+		blktap_page_pool_get(pool);
+		kobject_put(kobj); /* Put ref from __blktap_kset_find_obj(). */
+	}
 
 	mutex_unlock(&pool_set_mutex);
 
