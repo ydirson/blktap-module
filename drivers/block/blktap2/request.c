@@ -397,8 +397,10 @@ void blktap_page_pool_get(struct blktap_page_pool *pool)
 void blktap_page_pool_put(struct blktap_page_pool *pool)
 {
 	mutex_lock(&pool_set_mutex);
-	if (atomic_dec_and_test(&pool->users))
+	if (atomic_dec_and_test(&pool->users)) {
 		kobject_del(&pool->kobj);
+		kobject_put(&pool->kobj);
+	}
 	mutex_unlock(&pool_set_mutex);
 }
 
