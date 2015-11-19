@@ -79,7 +79,7 @@ struct blktap_statistics {
 	s64                            st_rd_max_usecs;
 	s64                            st_wr_cnt;
 	s64                            st_wr_sum_usecs;
-	s64                            st_wr_max_usecs;	
+	s64                            st_wr_max_usecs;
 };
 
 struct blktap_request {

@@ -100,10 +100,7 @@ DEFINE_RING_TYPES(blktap,
 		  struct blktap_ring_request,
 		  struct blktap_ring_response);
 
-#define BLKTAP_RING_SIZE						\
-	((int)__RD32((BLKTAP_PAGE_SIZE -				\
-		      (size_t)&((struct blktap_sring*)0)->ring) /	\
-		     sizeof(((struct blktap_sring *)0)->ring[0])))
+#define BLKTAP_RING_SIZE __CONST_RING_SIZE(blktap, BLKTAP_PAGE_SIZE)
 
 /*
  * Ring messages + old ioctls (DEPRECATED)

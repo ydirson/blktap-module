@@ -13,7 +13,7 @@
 int blktap_ring_major;
 static struct cdev blktap_ring_cdev;
 
- /* 
+ /*
   * BLKTAP - immediately before the mmap area,
   * we have a bunch of pages reserved for shared memory rings.
   */
@@ -280,7 +280,7 @@ blktap_ring_make_tr_request(struct blktap *tap,
 	unsigned int nsecs;
 
 	breq->u.tr.nr_sectors    = nsecs = bio_sectors(bio);
-	breq->u.tr.sector_number = bio->bi_sector;
+	breq->u.tr.sector_number = bio->bi_iter.bi_sector;
 
 	return nsecs;
 }

@@ -113,7 +113,7 @@ blktap_control_destroy_tap(struct blktap *tap)
 		return err;
 
 	kobject_put(&tap->pool->kobj);
-	
+
 	blktap_sysfs_destroy(tap);
 
 	blktap_control_put_minor(tap);

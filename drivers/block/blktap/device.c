@@ -29,7 +29,7 @@ blktap_device_open(struct block_device *bdev, fmode_t mode)
 	return 0;
 }
 
-static int
+static void
 blktap_device_release(struct gendisk *disk, fmode_t mode)
 {
 	struct blktap_device *tapdev = disk->private_data;
@@ -42,8 +42,6 @@ blktap_device_release(struct gendisk *disk, fmode_t mode)
 		set_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse);
 		blktap_ring_kick_user(tap);
 	}
-
-	return 0;
 }
 
 static int
@@ -78,13 +76,13 @@ blktap_device_ioctl(struct block_device *bd, fmode_t mode,
 		return 0;
 
 	case SCSI_IOCTL_GET_IDLUN:
-		if (!access_ok(VERIFY_WRITE, argument, 
+		if (!access_ok(VERIFY_WRITE, argument,
 			sizeof(struct scsi_idlun)))
 			return -EFAULT;
 
 		/* return 0 for now. */
 		__put_user(0, &((struct scsi_idlun __user *)argument)->dev_id);
-		__put_user(0, 
+		__put_user(0,
 			&((struct scsi_idlun __user *)argument)->host_unique_id);
 		return 0;
 
