@@ -306,7 +306,7 @@ __mempool_page_alloc(gfp_t gfp_mask, void *pool_data)
 {
 	struct page *page;
 
-	if (!(gfp_mask & __GFP_WAIT))
+	if (!gfpflags_allow_blocking(gfp_mask))
 		return NULL;
 
 	page = alloc_page(gfp_mask);
