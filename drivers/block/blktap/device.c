@@ -186,24 +186,27 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 		goto fail;
 	}
 
-	if (rq->cmd_flags & REQ_FLUSH) {
-		request->operation = BLKTAP_OP_FLUSH;
-		request->nr_pages  = 0;
-		goto submit;
-	}
-
-	if (rq->cmd_flags & REQ_DISCARD) {
-		request->operation = BLKTAP_OP_TRIM;
-		request->nr_pages  = 0;
-		goto submit;
+	switch (req_op(rq)) {
+		case REQ_OP_DISCARD:
+			request->operation = BLKTAP_OP_TRIM;
+			request->nr_pages  = 0;
+			goto submit;
+		case REQ_OP_FLUSH:
+			request->operation = BLKTAP_OP_FLUSH;
+			request->nr_pages  = 0;
+			goto submit;
+		case REQ_OP_READ:
+			request->operation = BLKTAP_OP_READ;
+			break;
+		case REQ_OP_WRITE:
+			request->operation = BLKTAP_OP_WRITE;
+			break;
+		default:
+			err = -EOPNOTSUPP;
+			goto fail;
 	}
 
 	nsegs = blk_rq_map_sg(rq->q, rq, request->sg_table);
-
-	if (rq_data_dir(rq) == WRITE)
-		request->operation = BLKTAP_OP_WRITE;
-	else
-		request->operation = BLKTAP_OP_READ;
 
 	err = blktap_request_get_pages(tap, request, nsegs);
 	if (err)
@@ -342,7 +345,7 @@ blktap_device_configure(struct blktap *tap,
 
 	/* Enable cache control */
 	if (info->flags & BLKTAP_DEVICE_FLAG_FLUSH)
-		blk_queue_flush(rq, REQ_FLUSH);
+		blk_queue_write_cache(rq, true, false);
 
 	/* Block discards */
 	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {
@@ -608,7 +611,7 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		 (unsigned long long)get_capacity(gd),
 		 rq->limits.discard_granularity,
 		 queue_discard_alignment(rq),
-		 rq->flush_flags);
+		 rq->queue_flags);
 
 	return 0;
 
