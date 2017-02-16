@@ -68,7 +68,7 @@ blktap_control_create_tap(void)
 	if (!tap)
 		return NULL;
 
-	kobject_get(&default_pool->kobj);
+	blktap_page_pool_get(default_pool);
 	tap->pool = default_pool;
 
 	err = blktap_ring_create(tap);
@@ -84,7 +84,7 @@ blktap_control_create_tap(void)
 fail_ring:
 	blktap_ring_destroy(tap);
 fail_tap:
-	kobject_put(&default_pool->kobj);
+	blktap_page_pool_put(default_pool);
 	blktap_control_put_minor(tap);
 
 	return NULL;
@@ -99,7 +99,7 @@ blktap_control_destroy_tap(struct blktap *tap)
 	if (err)
 		return err;
 
-	kobject_put(&tap->pool->kobj);
+	blktap_page_pool_put(tap->pool);
 
 	blktap_sysfs_destroy(tap);
 
@@ -174,7 +174,7 @@ static struct file_operations blktap_control_file_operations = {
 
 static struct miscdevice blktap_control = {
 	.minor    = MISC_DYNAMIC_MINOR,
-	.name     = "blktap-control",
+	.name     = "blktap/control",
 	.fops     = &blktap_control_file_operations,
 };
 
@@ -195,12 +195,12 @@ blktap_control_store_default_pool(struct device *device,
 {
 	struct blktap_page_pool *pool, *tmp = default_pool;
 
-	pool = blktap_page_pool_get(buf);
+	pool = blktap_page_pool_get_by_name(buf);
 	if (IS_ERR(pool))
 		return PTR_ERR(pool);
 
 	default_pool = pool;
-	kobject_put(&tmp->kobj);
+	blktap_page_pool_put(tmp);
 
 	return size;
 }
@@ -244,7 +244,7 @@ blktap_control_init(void)
 	if (err)
 		return err;
 
-	default_pool = blktap_page_pool_get("default");
+	default_pool = blktap_page_pool_get_by_name("default");
 	if (IS_ERR(default_pool)) {
 		err = PTR_ERR(default_pool);
 		default_pool = NULL;
@@ -262,7 +262,7 @@ static void
 blktap_control_exit(void)
 {
 	if (default_pool) {
-		kobject_put(&default_pool->kobj);
+		blktap_page_pool_put(default_pool);
 		default_pool = NULL;
 	}
 
