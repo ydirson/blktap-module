@@ -74,7 +74,7 @@ blktap_device_open(struct block_device *bdev, fmode_t mode)
 	return 0;
 }
 
-static int
+static void
 blktap_device_release(struct gendisk *disk, fmode_t mode)
 {
 	struct blktap_device *tapdev = disk->private_data;
@@ -87,8 +87,6 @@ blktap_device_release(struct gendisk *disk, fmode_t mode)
 		set_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse);
 		blktap_ring_kick_user(tap);
 	}
-
-	return 0;
 }
 
 static int
@@ -560,7 +558,7 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	dev_info(disk_to_dev(gd), "sector-size: %u/%u capacity: %llu\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
-		 get_capacity(gd));
+		 (unsigned long long)get_capacity(gd));
 
 	return 0;
 
@@ -601,7 +599,8 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 
 	s += snprintf(s, end - s,
 		      "disk capacity:%llu sector size:%u\n",
-		      get_capacity(disk), queue_logical_block_size(q));
+		      (unsigned long long)get_capacity(disk),
+		      queue_logical_block_size(q));
 
 	s += snprintf(s, end - s,
 		      "queue flags:%#lx stopped:%d\n",

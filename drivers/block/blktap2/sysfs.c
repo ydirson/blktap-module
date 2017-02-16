@@ -110,12 +110,12 @@ blktap_sysfs_store_pool(struct device *dev,
 	if (tap->device.gd)
 		return -EBUSY;
 
-	pool = blktap_page_pool_get(buf);
+	pool = blktap_page_pool_get_by_name(buf);
 	if (IS_ERR(pool))
 		return PTR_ERR(pool);
 
 	tap->pool = pool;
-	kobject_put(&tmp->kobj);
+	blktap_page_pool_put(tmp);
 
 	return size;
 }
@@ -130,7 +130,7 @@ blktap_sysfs_create(struct blktap *tap)
 	int err = 0;
 
 	dev = device_create(class, NULL, ring->devno,
-			    tap, "blktap%d", tap->minor);
+			    tap, "blktap/blktap%d", tap->minor);
 	if (IS_ERR(dev))
 		err = PTR_ERR(dev);
 	if (!err)

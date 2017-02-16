@@ -24,7 +24,7 @@ extern int blktap_device_major;
 #define BTWARN(_f, _a...)            BTPRINTK(0, KERN_WARNING, 0, _f, ##_a)
 #define BTERR(_f, _a...)             BTPRINTK(0, KERN_ERR, 0, _f, ##_a)
 
-#define MAX_BLKTAP_DEVICE            4096
+#define MAX_BLKTAP_DEVICE            16384
 #define BLKTAP_DEVICE                4
 #define BLKTAP_DEVICE_CLOSED         5
 #define BLKTAP_SHUTDOWN_REQUESTED    8
@@ -113,6 +113,15 @@ struct blktap {
 };
 
 struct blktap_page_pool {
+	/*
+	 * Use a pool-specific reference count for the current pool
+	 * users, rather than the kobject reference count. We can then
+	 * delete the kobject immediately (and safely) when there are
+	 * no users.
+	 *
+	 * See blktap_page_pool_get() and blktap_page_pool_put().
+	 */
+	atomic_t                       users;
 	struct mempool_s              *bufs;
 	spinlock_t                     lock;
 	struct kobject                 kobj;
@@ -157,7 +166,9 @@ void blktap_device_start_queue(struct blktap *tap);
 
 int blktap_page_pool_init(struct kobject *);
 void blktap_page_pool_exit(void);
-struct blktap_page_pool *blktap_page_pool_get(const char *);
+void blktap_page_pool_get(struct blktap_page_pool *pool);
+void blktap_page_pool_put(struct blktap_page_pool *pool);
+struct blktap_page_pool *blktap_page_pool_get_by_name(const char *);
 
 size_t blktap_request_debug(struct blktap *, char *, size_t);
 struct blktap_request *blktap_request_alloc(struct blktap *);
