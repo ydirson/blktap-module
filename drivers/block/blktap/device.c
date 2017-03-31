@@ -604,7 +604,7 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 
 	dev_info(disk_to_dev(gd),
 		 "sector-size: %u/%u+%u capacity: %llu"
-		 " discard: %u+%u flush: %#x\n",
+		 " discard: %u+%u flush: %#lx\n",
 		 queue_logical_block_size(rq),
 		 queue_physical_block_size(rq),
 		 queue_alignment_offset(rq),
