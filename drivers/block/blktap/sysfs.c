@@ -278,7 +278,7 @@ blktap_sysfs_destroy(struct blktap *tap)
 }
 
 static ssize_t
-blktap_sysfs_show_verbosity(struct class *class,
+verbosity_show(struct class *class,
 			    struct class_attribute *attr,
 			    char *buf)
 {
@@ -286,7 +286,7 @@ blktap_sysfs_show_verbosity(struct class *class,
 }
 
 static ssize_t
-blktap_sysfs_set_verbosity(struct class *class,
+verbosity_store(struct class *class,
 			   struct class_attribute *attr,
 			   const char *buf, size_t size)
 {
@@ -299,11 +299,11 @@ blktap_sysfs_set_verbosity(struct class *class,
 
 	return -EINVAL;
 }
-static CLASS_ATTR(verbosity, S_IRUGO|S_IWUSR,
-		  blktap_sysfs_show_verbosity, blktap_sysfs_set_verbosity);
+static CLASS_ATTR_RW(verbosity);
+
 
 static ssize_t
-blktap_sysfs_show_devices(struct class *class,
+devices_show(struct class *class,
 			  struct class_attribute *attr,
 			  char *buf)
 {
@@ -328,7 +328,7 @@ blktap_sysfs_show_devices(struct class *class,
 
 	return ret;
 }
-static CLASS_ATTR(devices, S_IRUGO, blktap_sysfs_show_devices, NULL);
+static CLASS_ATTR_RO(devices);
 
 void
 blktap_sysfs_exit(void)

@@ -122,7 +122,7 @@ __blktap_dequeue_rq(struct request *rq)
 static inline void
 __blktap_end_queued_rq(struct request *rq, int err)
 {
-	rq->cmd_flags |= REQ_QUIET;
+	rq->cmd_flags |= RQF_QUIET;
 	blk_start_request(rq);
 	__blk_end_request(rq, err, blk_rq_bytes(rq));
 }
@@ -181,7 +181,7 @@ blktap_device_make_request(struct blktap *tap, struct request *rq)
 		goto fail;
 	}
 
-	if (rq->cmd_type != REQ_TYPE_FS) {
+	if (blk_rq_is_passthrough(rq)) {
 		err = -EOPNOTSUPP;
 		goto fail;
 	}
@@ -355,7 +355,6 @@ blktap_device_configure(struct blktap *tap,
 
 		limits->discard_granularity = info->trim_block_size;
 		limits->discard_alignment   = info->trim_block_offset;
-		limits->discard_zeroes_data = trz;
 
 		queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, rq);
 	}

@@ -136,16 +136,16 @@ blktap_request_bounce(struct blktap *tap,
 {
 	struct scatterlist *sg = &request->sg_table[seg];
 	void *s, *p;
-
+	if (!sg || !request) return;
 	BUG_ON(seg >= request->nr_pages);
-
+	
 	s = sg_virt(sg);
 	p = page_address(request->pages[seg]) + sg->offset;
-
-	if (write)
+	if (!s || !p) return;
+	if (write) {
 		memcpy(p, s, sg->length);
-	else
-		memcpy(s, p, sg->length);
+	} else {
+		memcpy(s, p, sg->length); }
 }
 
 static void
