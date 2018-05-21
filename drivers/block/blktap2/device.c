@@ -544,7 +544,7 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		goto fail;
 	}
  
-	elevator_init(rq, "noop");
+	elevator_change(rq, "noop");
 
 	gd->queue     = rq;
 	rq->queuedata = tapdev;
