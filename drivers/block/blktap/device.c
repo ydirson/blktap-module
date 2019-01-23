@@ -343,6 +343,9 @@ blktap_device_configure(struct blktap *tap,
 	/* Make sure buffer addresses are sector-aligned. */
 	blk_queue_dma_alignment(rq, 511);
 
+	/* Make sure there is buffer control on high memory pages */
+	blk_queue_bounce_limit(rq, BLK_BOUNCE_HIGH);
+
 	/* Enable cache control */
 	if (info->flags & BLKTAP_DEVICE_FLAG_FLUSH)
 		blk_queue_write_cache(rq, true, false);
