@@ -748,7 +748,7 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 		if (!request)
 			continue;
 
-		jiffies_to_timeval(jiffies - request->rq->start_time, &t);
+		jiffies_to_timeval(jiffies, &t);
 
 		s += snprintf(s, end - s,
 			      "%02d: usr_idx:%02d "

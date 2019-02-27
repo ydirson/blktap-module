@@ -254,8 +254,8 @@ blktap_device_run_queue(struct blktap *tap)
 
 	q = tapdev->gd->queue;
 
+	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 	spin_lock_irq(&tapdev->lock);
-	queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 
 	do {
 		rq = __blktap_next_queued_rq(q);
@@ -359,7 +359,7 @@ blktap_device_configure(struct blktap *tap,
 		limits->discard_granularity = info->trim_block_size;
 		limits->discard_alignment   = info->trim_block_offset;
 
-		queue_flag_set_unlocked(QUEUE_FLAG_DISCARD, rq);
+		blk_queue_flag_set(QUEUE_FLAG_DISCARD, rq);
 	}
 }
 
@@ -518,8 +518,8 @@ blktap_device_fail_queue(struct blktap *tap)
 	struct blktap_device *tapdev = &tap->device;
 	struct request_queue *q = tapdev->gd->queue;
 
+	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 	spin_lock_irq(&tapdev->lock);
-	queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 
 	do {
 		struct request *rq = __blktap_next_queued_rq(q);
@@ -593,7 +593,7 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		err = -ENOMEM;
 		goto fail;
 	}
-	elevator_init(rq, "noop");
+	elevator_init(rq);
 
 	gd->queue     = rq;
 	rq->queuedata = tapdev;
