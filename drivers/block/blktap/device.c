@@ -352,8 +352,6 @@ blktap_device_configure(struct blktap *tap,
 
 	/* Block discards */
 	if (info->flags & BLKTAP_DEVICE_FLAG_TRIM) {
-		int trz = !!(info->flags & BLKTAP_DEVICE_FLAG_TRIM_RZ);
-
 		blk_queue_max_discard_sectors(rq, UINT_MAX);
 
 		limits->discard_granularity = info->trim_block_size;

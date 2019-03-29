@@ -501,7 +501,6 @@ blktap_ring_ioctl(struct file *filp,
 		mask |= BLKTAP_DEVICE_FLAG_PSZ;
 		mask |= BLKTAP_DEVICE_FLAG_FLUSH;
 		mask |= BLKTAP_DEVICE_FLAG_TRIM;
-		mask |= BLKTAP_DEVICE_FLAG_TRIM_RZ;
 
 		memset(&info, 0, sizeof(info));
 		sz = base_sz = BLKTAP_INFO_SIZE_AT(flags);

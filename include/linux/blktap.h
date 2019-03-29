@@ -24,7 +24,6 @@
 #define BLKTAP_DEVICE_FLAG_PSZ      0x00000002UL /* physical sector size */
 #define BLKTAP_DEVICE_FLAG_FLUSH    0x00000004UL /* supports FLUSH */
 #define BLKTAP_DEVICE_FLAG_TRIM     0x00000008UL /* supports TRIM */
-#define BLKTAP_DEVICE_FLAG_TRIM_RZ  0x00000010UL /* trimmed data reads zero */
 
 struct blktap_info {
 	unsigned int            ring_major;
