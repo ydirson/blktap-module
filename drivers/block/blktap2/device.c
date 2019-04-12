@@ -162,35 +162,33 @@ __blktap_dequeue_rq(struct request *rq)
 	blk_start_request(rq);
 }
 
-/* NB. err == 0 indicates success, failures < 0 */
-
 static inline void
-__blktap_end_queued_rq(struct request *rq, int err)
+__blktap_end_queued_rq(struct request *rq, blk_status_t status)
 {
 	blk_start_request(rq);
-	__blk_end_request(rq, err, blk_rq_bytes(rq));
+	__blk_end_request(rq, status, blk_rq_bytes(rq));
 }
 
 static inline void
-__blktap_end_rq(struct request *rq, int err)
+__blktap_end_rq(struct request *rq, blk_status_t status)
 {
-	__blk_end_request(rq, err, blk_rq_bytes(rq));
+	__blk_end_request(rq, status, blk_rq_bytes(rq));
 }
 
 static inline void
-blktap_end_rq(struct request *rq, int err)
+blktap_end_rq(struct request *rq, blk_status_t status)
 {
 	struct request_queue *q = rq->q;
 
 	spin_lock_irq(q->queue_lock);
-	__blktap_end_rq(rq, err);
+	__blktap_end_rq(rq, status);
 	spin_unlock_irq(q->queue_lock);
 }
 
 void
 blktap_device_end_request(struct blktap *tap,
 			  struct blktap_request *request,
-			  int error)
+			  blk_status_t status)
 {
 	struct blktap_device *tapdev = &tap->device;
 	struct request *rq = request->rq;
@@ -200,10 +198,10 @@ blktap_device_end_request(struct blktap *tap,
 	blktap_ring_free_request(tap, request);
 
 	dev_dbg(disk_to_dev(tapdev->gd),
-		"end_request: op=%d error=%d bytes=%d\n",
-		rq_data_dir(rq), error, blk_rq_bytes(rq));
+		"end_request: op=%d status=%u bytes=%d\n",
+		rq_data_dir(rq), status, blk_rq_bytes(rq));
 
-	blktap_end_rq(rq, error);
+	blktap_end_rq(rq, status);
 }
 
 int
@@ -264,6 +262,19 @@ fail:
 }
 
 /*
+ * The tapdev lock is the same lock as the queue lock. Queue flags are cleared
+ * while the tapdev lock is held. The block layer does not export an unlocked
+ * variant of blk_queue_flag_clear so add an unlocked variant here
+ * (from * block/blk.h).
+ */
+static inline void queue_flag_clear(unsigned int flag, struct request_queue *q)
+{
+	if (q->queue_lock)
+		lockdep_assert_held(q->queue_lock);
+	__clear_bit(flag, &q->queue_flags);
+}
+
+/*
  * called from tapdisk context
  */
 void
@@ -287,8 +298,8 @@ blktap_device_run_queue(struct blktap *tap)
 		if (!rq)
 			break;
 
-		if (rq->cmd_type != REQ_TYPE_FS) {
-			__blktap_end_queued_rq(rq, -EOPNOTSUPP);
+		if (blk_rq_is_passthrough(rq)) {
+			__blktap_end_queued_rq(rq, BLK_STS_NOTSUPP);
 			continue;
 		}
 
@@ -307,7 +318,7 @@ blktap_device_run_queue(struct blktap *tap)
 		__blktap_dequeue_rq(rq);
 
 		if (unlikely(err))
-			__blktap_end_rq(rq, err);
+			__blktap_end_rq(rq, errno_to_blk_status(err));
 	} while (1);
 
 	spin_unlock_irq(&tapdev->lock);
@@ -465,7 +476,7 @@ blktap_device_fail_queue(struct blktap *tap)
 		if (!rq)
 			break;
 
-		__blktap_end_queued_rq(rq, -EIO);
+		__blktap_end_queued_rq(rq, BLK_STS_IOERR);
 	} while (1);
 
 	spin_unlock_irq(&tapdev->lock);
@@ -497,7 +508,7 @@ blktap_device_destroy_sync(struct blktap *tap)
 int
 __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 {
-	int minor, err;
+	int minor;
 	struct gendisk *gd;
 	struct request_queue *rq;
 	struct blktap_device *tapdev;
@@ -514,10 +525,8 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		return -EINVAL;
 
 	gd = alloc_disk(1);
-	if (!gd) {
-		err = -ENOMEM;
-		goto fail;
-	}
+	if (!gd)
+		return -ENOMEM;
 
 	if (minor < 26) {
 		sprintf(gd->disk_name, "td%c", 'a' + minor % 26);
@@ -540,11 +549,9 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	spin_lock_init(&tapdev->lock);
 	rq = blk_init_queue(blktap_device_do_request, &tapdev->lock);
 	if (!rq) {
-		err = -ENOMEM;
-		goto fail;
+		put_disk(gd);
+		return -ENOMEM;
 	}
- 
-	elevator_change(rq, "noop");
 
 	gd->queue     = rq;
 	rq->queuedata = tapdev;
@@ -561,14 +568,6 @@ __blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		 (unsigned long long)get_capacity(gd));
 
 	return 0;
-
-fail:
-	if (gd)
-		del_gendisk(gd);
-	if (rq)
-		blk_cleanup_queue(rq);
-
-	return err;
 }
 
 int

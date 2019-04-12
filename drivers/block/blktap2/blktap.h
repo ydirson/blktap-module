@@ -1,6 +1,7 @@
 #ifndef _BLKTAP_H_
 #define _BLKTAP_H_
 
+#include <linux/blk_types.h>
 #include <linux/mm.h>
 #include <linux/fs.h>
 #include <linux/cdev.h>
@@ -161,7 +162,7 @@ int blktap_device_create(struct blktap *, struct blktap_device_info *);
 int blktap_device_destroy(struct blktap *);
 void blktap_device_destroy_sync(struct blktap *);
 void blktap_device_run_queue(struct blktap *);
-void blktap_device_end_request(struct blktap *, struct blktap_request *, int);
+void blktap_device_end_request(struct blktap *, struct blktap_request *, blk_status_t);
 void blktap_device_start_queue(struct blktap *tap);
 
 int blktap_page_pool_init(struct kobject *);

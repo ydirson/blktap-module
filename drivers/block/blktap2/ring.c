@@ -23,25 +23,26 @@ blktap_ring_read_response(struct blktap *tap,
 {
 	struct blktap_ring *ring = &tap->ring;
 	struct blktap_request *request;
-	int usr_idx, err;
+	int usr_idx;
+	blk_status_t status;
 
 	request = NULL;
 
 	usr_idx = rsp->id;
 	if (usr_idx < 0 || usr_idx >= BLKTAP_RING_SIZE) {
-		err = -ERANGE;
+		status = BLK_STS_IOERR;
 		goto invalid;
 	}
 
 	request = ring->pending[usr_idx];
 
 	if (!request) {
-		err = -ESRCH;
+		status = BLK_STS_IOERR;
 		goto invalid;
 	}
 
 	if (rsp->operation != request->operation) {
-		err = -EINVAL;
+		status = BLK_STS_IOERR;
 		goto invalid;
 	}
 
@@ -49,17 +50,17 @@ blktap_ring_read_response(struct blktap *tap,
 		"request %d [%p] response: %d\n",
 		request->usr_idx, request, rsp->status);
 
-	err = rsp->status == BLKTAP_RSP_OKAY ? 0 : -EIO;
+	status = rsp->status == BLKTAP_RSP_OKAY ? BLK_STS_OK : BLK_STS_IOERR;
 end_request:
-	blktap_device_end_request(tap, request, err);
+	blktap_device_end_request(tap, request, status);
 	return;
 
 invalid:
 	dev_warn(ring->dev,
-		 "invalid response, idx:%d status:%d op:%d/%d: err %d\n",
+		 "invalid response, idx:%d status:%d op:%d/%d: status %u\n",
 		 usr_idx, rsp->status,
 		 rsp->operation, request->operation,
-		 err);
+		 status);
 	if (request)
 		goto end_request;
 }
@@ -88,7 +89,7 @@ blktap_read_ring(struct blktap *tap)
 	 ((_req) * BLKTAP_SEGMENT_MAX * BLKTAP_PAGE_SIZE) +	\
 	 ((_seg) * BLKTAP_PAGE_SIZE))
 
-static int blktap_ring_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
+static int blktap_ring_fault(struct vm_fault *vmf)
 {
 	return VM_FAULT_SIGBUS;
 }
@@ -105,7 +106,7 @@ blktap_ring_fail_pending(struct blktap *tap)
 		if (!request)
 			continue;
 
-		blktap_device_end_request(tap, request, -EIO);
+		blktap_device_end_request(tap, request, BLK_STS_IOERR);
 	}
 }
 
@@ -118,7 +119,7 @@ blktap_ring_vm_close(struct vm_area_struct *vma)
 
 	blktap_ring_fail_pending(tap);
 
-	zap_page_range(vma, vma->vm_start, PAGE_SIZE, NULL);
+	zap_page_range(vma, vma->vm_start, PAGE_SIZE);
 	ClearPageReserved(page);
 	__free_page(page);
 
@@ -186,7 +187,7 @@ blktap_ring_unmap_request(struct blktap *tap,
 		for (seg = 0; seg < request->nr_pages; seg++)
 			blktap_request_bounce(tap, request, seg, !read);
 
-	zap_page_range(ring->vma, uaddr, size, NULL);
+	zap_page_range(ring->vma, uaddr, size);
 }
 
 void
@@ -360,7 +361,7 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 
 fail:
 	if (page) {
-		zap_page_range(vma, vma->vm_start, PAGE_SIZE, NULL);
+		zap_page_range(vma, vma->vm_start, PAGE_SIZE);
 		ClearPageReserved(page);
 		__free_page(page);
 	}
@@ -410,10 +411,8 @@ __blktap_ring_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		if (err)
 			return err;
 
-		if (params.name[0]) {
-			strncpy(tap->name, params.name, sizeof(params.name));
-			tap->name[sizeof(tap->name)-1] = 0;
-		}
+		if (params.name[0])
+			strlcpy(tap->name, params.name, sizeof(tap->name));
 
 		return 0;
 	}
