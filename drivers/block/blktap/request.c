@@ -141,7 +141,7 @@ blktap_request_bounce(struct blktap *tap,
 		return;
 
 	BUG_ON(seg >= request->nr_pages);
-	
+
 	s = sg_virt(sg);
 	p = page_address(request->pages[seg]);
 	if (!s || !p)

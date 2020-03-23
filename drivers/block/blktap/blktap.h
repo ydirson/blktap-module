@@ -7,6 +7,7 @@
 #include <linux/init.h>
 #include <linux/scatterlist.h>
 #include <linux/blktap.h>
+#include <linux/blk-mq.h>
 
 extern int blktap_debug_level;
 extern int blktap_ring_major;
@@ -106,10 +107,12 @@ struct blktap {
 	struct blktap_ring             ring;
 	struct blktap_device           device;
 	struct blktap_page_pool       *pool;
+	struct request_queue          *rq;
 
 	wait_queue_head_t              remove_wait;
 	struct work_struct             remove_work;
 	struct delayed_work            destroy_work;
+	struct blk_mq_tag_set          tag_set;
 	char                           name[BLKTAP_NAME_MAX];
 
 	struct blktap_statistics       stats;

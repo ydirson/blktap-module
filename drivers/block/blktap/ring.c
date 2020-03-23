@@ -102,7 +102,7 @@ blktap_read_ring(struct blktap *tap)
 	 ((_req) * BLKTAP_SEGMENT_MAX * BLKTAP_PAGE_SIZE) +	\
 	 ((_seg) * BLKTAP_PAGE_SIZE))
 
-static int blktap_ring_fault(struct vm_fault *vmf)
+static vm_fault_t blktap_ring_fault(struct vm_fault *vmf)
 {
 	return VM_FAULT_SIGBUS;
 }
