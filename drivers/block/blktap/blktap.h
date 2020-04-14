@@ -162,7 +162,7 @@ int blktap_device_try_destroy(struct blktap *tap);
 int blktap_device_pause(struct blktap *);
 int blktap_device_resume(struct blktap *tap);
 void blktap_device_run_queue(struct blktap *);
-void blktap_device_end_request(struct blktap *, struct blktap_request *, int);
+void blktap_device_end_request(struct blktap *, struct blktap_request *, blk_status_t);
 
 int blktap_page_pool_init(struct kobject *);
 void blktap_page_pool_exit(void);

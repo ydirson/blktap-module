@@ -123,7 +123,7 @@ __blktap_dequeue_rq(struct request *rq)
 /* NB. err == 0 indicates success, failures < 0 */
 
 static inline void
-__blktap_end_queued_rq(struct request *rq, int err)
+__blktap_end_queued_rq(struct request *rq, blk_status_t err)
 {
 	rq->cmd_flags |= RQF_QUIET;
 	blk_mq_start_request(rq);
@@ -131,13 +131,13 @@ __blktap_end_queued_rq(struct request *rq, int err)
 }
 
 static inline void
-__blktap_end_rq(struct request *rq, int err)
+__blktap_end_rq(struct request *rq, blk_status_t err)
 {
 	blk_mq_end_request(rq, err);
 }
 
 static inline void
-blktap_end_rq(struct request *rq, int err)
+blktap_end_rq(struct request *rq, blk_status_t err)
 {
 	struct request_queue *q = rq->q;
 
@@ -149,7 +149,7 @@ blktap_end_rq(struct request *rq, int err)
 void
 blktap_device_end_request(struct blktap *tap,
 			  struct blktap_request *request,
-			  int error)
+			  blk_status_t error)
 {
 	struct blktap_device *tapdev = &tap->device;
 	struct request *rq = request->rq;

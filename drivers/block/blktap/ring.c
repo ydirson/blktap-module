@@ -55,7 +55,7 @@ blktap_ring_read_response(struct blktap *tap,
 		"request %d [%p] response: %d\n",
 		request->usr_idx, request, rsp->status);
 
-	err = rsp->status == BLKTAP_RSP_OKAY ? 0 : -EIO;
+	err = rsp->status == BLKTAP_RSP_OKAY ? BLK_STS_OK : BLK_STS_IOERR;
 end_request:
 	blktap_device_end_request(tap, request, err);
 	return;
@@ -120,7 +120,7 @@ blktap_ring_fail_pending(struct blktap *tap)
 			continue;
 
 		request->rq->cmd_flags |= RQF_QUIET;
-		blktap_device_end_request(tap, request, -EIO);
+		blktap_device_end_request(tap, request, BLK_STS_IOERR);
 	}
 }
 
