@@ -133,6 +133,7 @@ blktap_control_destroy_tap_ioctl(int minor)
 {
 	struct blktap *tap;
 	struct blktap_ring *ring;
+	int r;
 
 	tap = blktaps[minor];
 	if (!tap)
@@ -140,16 +141,15 @@ blktap_control_destroy_tap_ioctl(int minor)
 
 	ring = &tap->ring;
 
-	for (;;) {
-		int r;
+	if (ring->vma == NULL && ring->n_pending)
+		printk(KERN_WARNING
+		       "blktap%d ring not mapped and n_pending %d\n",
+		       minor, ring->n_pending);
 
-		r = wait_event_interruptible_timeout(tap->remove_wait,
-						     !ring->n_pending, HZ / 10);
-		if (r == -ERESTARTSYS)
-			return -EAGAIN;
-		if (r > 0)
-			break;
-	}
+	r = wait_event_interruptible(tap->remove_wait,
+				     ring->n_pending == 0 || ring->vma == NULL);
+	if (r == -ERESTARTSYS)
+		return -EAGAIN;
 
 	if (test_and_set_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
 		return 0;

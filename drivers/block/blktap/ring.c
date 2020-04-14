@@ -138,6 +138,7 @@ blktap_ring_vm_close(struct vm_area_struct *vma)
 	__free_page(page);
 
 	ring->vma = NULL;
+	wake_up_interruptible(&tap->remove_wait);
 
 	if (test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
 		blktap_control_destroy_tap(tap);
@@ -425,6 +426,8 @@ blktap_ring_mmap(struct file *filp, struct vm_area_struct *vma)
 	vma->vm_ops = &blktap_ring_vm_operations;
 
 	ring->vma = vma;
+	wake_up_interruptible(&tap->remove_wait);
+
 	return 0;
 
 fail:
