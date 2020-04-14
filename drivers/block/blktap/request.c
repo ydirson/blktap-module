@@ -106,14 +106,25 @@ blktap_request_debug(struct blktap *tap, char *buf, size_t size)
 	return s - buf;
 }
 
+static void
+blktap_request_ctor(void *obj)
+{
+	struct blktap_request *request = obj;
+
+	memset(request, 0, sizeof(*request));
+	sg_init_table(request->sg_table, ARRAY_SIZE(request->sg_table));
+}
+
 struct blktap_request*
 blktap_request_alloc(struct blktap *tap)
 {
 	struct blktap_request *request;
 
 	request = mempool_alloc(request_pool, GFP_NOWAIT);
-	if (request)
+	if (request) {
+		blktap_request_ctor(request);
 		request->tap = tap;
+	}
 
 	return request;
 }
@@ -152,15 +163,6 @@ blktap_request_bounce(struct blktap *tap,
 		memcpy(p, s, sg->length);
 	else
 		memcpy(s, p, sg->length);
-}
-
-static void
-blktap_request_ctor(void *obj)
-{
-	struct blktap_request *request = obj;
-
-	memset(request, 0, sizeof(*request));
-	sg_init_table(request->sg_table, ARRAY_SIZE(request->sg_table));
 }
 
 static int
@@ -388,7 +390,7 @@ blktap_page_pool_init(struct kobject *parent)
 	request_cache =
 		kmem_cache_create("blktap-request",
 				  sizeof(struct blktap_request), 0,
-				  0, blktap_request_ctor);
+				  0, NULL);
 	if (!request_cache)
 		return -ENOMEM;
 
