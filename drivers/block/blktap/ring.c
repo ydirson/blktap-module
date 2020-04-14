@@ -213,6 +213,7 @@ blktap_ring_free_request(struct blktap *tap,
 
 	ring->pending[request->usr_idx] = NULL;
 	ring->n_pending--;
+	wake_up_interruptible(&tap->remove_wait);
 
 	blktap_request_free(tap, request);
 }
@@ -242,6 +243,7 @@ blktap_ring_make_request(struct blktap *tap)
 
 	ring->pending[usr_idx] = request;
 	ring->n_pending++;
+	wake_up_interruptible(&tap->remove_wait);
 
 	return request;
 }
