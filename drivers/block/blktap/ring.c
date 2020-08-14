@@ -77,9 +77,7 @@ blktap_read_ring(struct blktap *tap)
 	struct blktap_ring_response rsp;
 	RING_IDX rc, rp;
 
-	down_write(&current->mm->mmap_sem);
 	if (!ring->vma) {
-		up_read(&current->mm->mmap_sem);
 		return;
 	}
 
@@ -93,8 +91,6 @@ blktap_read_ring(struct blktap *tap)
 	}
 
 	ring->ring.rsp_cons = rc;
-
-	up_write(&current->mm->mmap_sem);
 }
 
 #define MMAP_VADDR(_start, _req, _seg)				\
@@ -156,9 +152,16 @@ blktap_ring_map_segment(struct blktap *tap,
 {
 	struct blktap_ring *ring = &tap->ring;
 	unsigned long uaddr;
+	int ret;
+
+	down_write(&ring->vma->vm_mm->mmap_sem);
 
 	uaddr = MMAP_VADDR(ring->user_vstart, request->usr_idx, seg);
-	return vm_insert_page(ring->vma, uaddr, request->pages[seg]);
+	ret = vm_insert_page(ring->vma, uaddr, request->pages[seg]);
+
+	up_write(&ring->vma->vm_mm->mmap_sem);
+
+	return ret;
 }
 
 int
@@ -447,10 +450,8 @@ blktap_ring_set_message(struct blktap *tap, int msg)
 {
         struct blktap_ring *ring = &tap->ring;
 
-        down_read(&current->mm->mmap_sem);
         if (ring->ring.sring)
                 ring->ring.sring->pad[0] = msg;
-        up_read(&current->mm->mmap_sem);
 }
 
 static long
@@ -618,10 +619,8 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 	poll_wait(filp, &tap->pool->wait, wait);
 	poll_wait(filp, &ring->poll_wait, wait);
 
-	down_read(&current->mm->mmap_sem);
 	if (ring->vma && tap->device.gd)
 		blktap_device_run_queue(tap);
-	up_read(&current->mm->mmap_sem);
 
 	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
 	RING_PUSH_REQUESTS(&ring->ring);
