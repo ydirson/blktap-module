@@ -554,7 +554,9 @@ static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
 		break;
 	}
 
-	blktap_device_do_request(tapdev->gd->queue);
+	if (qd->last)
+		blktap_device_do_request(tapdev->gd->queue);
+
 	spin_unlock_irqrestore(&tapdev->lock, flags);
 	return BLK_STS_OK;
 
@@ -574,9 +576,18 @@ static void blktap_complete_rq(struct request *rq)
 	blk_mq_end_request(rq, blktap_req(rq)->error);
 }
 
+static void blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
+{
+	struct blktap *tap = hctx->queue->queuedata;
+	struct blktap_device *tapdev = &tap->device;
+
+	blktap_device_do_request(tapdev->gd->queue);
+}
+
 static const struct blk_mq_ops blktap_mq_ops = {
 	.queue_rq       = blktap_queue_rq,
 	.complete	= blktap_complete_rq,
+	.commit_rqs	= blktap_commit_rqs,
 };
 
 static struct request_queue *init_queue(struct blktap *tap)
