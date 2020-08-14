@@ -112,40 +112,6 @@ static struct block_device_operations blktap_device_file_operations = {
 	.getgeo    = blktap_device_getgeo
 };
 
-/* NB. __blktap holding the queue lock; blktap where unlocked */
-
-static inline void
-__blktap_dequeue_rq(struct request *rq)
-{
-	blk_mq_start_request(rq);
-}
-
-/* NB. err == 0 indicates success, failures < 0 */
-
-static inline void
-__blktap_end_queued_rq(struct request *rq, blk_status_t err)
-{
-	rq->cmd_flags |= RQF_QUIET;
-	blk_mq_start_request(rq);
-	__blk_mq_end_request(rq, err);
-}
-
-static inline void
-__blktap_end_rq(struct request *rq, blk_status_t err)
-{
-	blk_mq_end_request(rq, err);
-}
-
-static inline void
-blktap_end_rq(struct request *rq, blk_status_t err)
-{
-	struct request_queue *q = rq->q;
-
-	spin_lock_irq(&q->queue_lock);
-	__blktap_end_rq(rq, err);
-	spin_unlock_irq(&q->queue_lock);
-}
-
 void
 blktap_device_end_request(struct blktap *tap,
 			  struct blktap_request *request,
@@ -162,7 +128,10 @@ blktap_device_end_request(struct blktap *tap,
 		"end_request: op=%d error=%d bytes=%d\n",
 		rq_data_dir(rq), error, blk_rq_bytes(rq));
 
-	blktap_end_rq(rq, error);
+	// XXX Maybe this lock is unneeded
+	spin_lock_irq(&rq->q->queue_lock);
+	blk_mq_end_request(rq, error);
+	spin_unlock_irq(&rq->q->queue_lock);
 }
 
 int
