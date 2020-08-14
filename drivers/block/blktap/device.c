@@ -219,14 +219,6 @@ static void cleanup_queue(struct request_queue *rq)
 }
 
 static void
-blktap_device_do_request(struct request_queue *rq)
-{
-	struct blktap *tap = rq->queuedata;
-
-	blktap_ring_kick_user(tap);
-}
-
-static void
 blktap_device_restart(struct blktap *tap)
 {
         struct blktap_device *dev;
@@ -243,7 +235,7 @@ blktap_device_restart(struct blktap *tap)
                         blk_mq_start_hw_queues(rq);
 
                 /* Kick things off immediately. */
-                blktap_device_do_request(rq);
+                blktap_ring_kick_user(tap);
         }
 
         spin_unlock_irq(&dev->lock);
@@ -506,7 +498,7 @@ static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
 	}
 
 	if (qd->last)
-		blktap_device_do_request(tapdev->gd->queue);
+		blktap_ring_kick_user(tap);
 
 	spin_unlock_irqrestore(&tapdev->lock, flags);
 	return BLK_STS_OK;
@@ -530,9 +522,8 @@ static void blktap_complete_rq(struct request *rq)
 static void blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
 {
 	struct blktap *tap = hctx->queue->queuedata;
-	struct blktap_device *tapdev = &tap->device;
 
-	blktap_device_do_request(tapdev->gd->queue);
+	blktap_ring_kick_user(tap);
 }
 
 static const struct blk_mq_ops blktap_mq_ops = {
