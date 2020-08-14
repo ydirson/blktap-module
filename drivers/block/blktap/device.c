@@ -249,24 +249,6 @@ static void cleanup_queue(struct request_queue *rq)
 	blk_mq_free_tag_set(&tap->tag_set);
 }
 
-/*
- * called from tapdisk context
- */
-void
-blktap_device_run_queue(struct blktap *tap)
-{
-	struct blktap_device *tapdev = &tap->device;
-	struct request_queue *q;
-
-	if (!tapdev->gd)
-		return;
-
-	q = tapdev->gd->queue;
-
-	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
-	blk_mq_run_hw_queues(q, true);
-}
-
 static void
 blktap_device_do_request(struct request_queue *rq)
 {
