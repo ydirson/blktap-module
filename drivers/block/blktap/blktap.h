@@ -42,6 +42,8 @@ extern int blktap_device_major;
 struct blktap_device {
 	spinlock_t                     lock;
 	struct gendisk                *gd;
+	struct request_queue          *rq;
+	struct blk_mq_tag_set          tag_set;
 };
 
 struct blktap_request;
@@ -107,12 +109,10 @@ struct blktap {
 	struct blktap_ring             ring;
 	struct blktap_device           device;
 	struct blktap_page_pool       *pool;
-	struct request_queue          *rq;
 
 	wait_queue_head_t              remove_wait;
 	struct work_struct             remove_work;
 	struct delayed_work            destroy_work;
-	struct blk_mq_tag_set          tag_set;
 	char                           name[BLKTAP_NAME_MAX];
 
 	struct blktap_statistics       stats;

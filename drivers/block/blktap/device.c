@@ -213,9 +213,10 @@ fail:
 static void cleanup_queue(struct request_queue *rq)
 {
 	struct blktap *tap = rq->queuedata;
+	struct blktap_device *tapdev = &tap->device;
 
 	blk_cleanup_queue(rq);
-	blk_mq_free_tag_set(&tap->tag_set);
+	blk_mq_free_tag_set(&tapdev->tag_set);
 }
 
 static void
@@ -416,7 +417,7 @@ blktap_device_destroy(struct blktap *tap)
 		goto out;
 	}
 
-	blk_mq_stop_hw_queues(tap->rq);
+	blk_mq_stop_hw_queues(tapdev->rq);
 
 	del_gendisk(gd);
 	gd->private_data = NULL;
@@ -534,29 +535,30 @@ static const struct blk_mq_ops blktap_mq_ops = {
 
 static struct request_queue *init_queue(struct blktap *tap)
 {
+	struct blktap_device *tapdev = &tap->device;
 	struct request_queue *rq;
 
-	memset(&tap->tag_set, 0, sizeof(tap->tag_set));
-	tap->tag_set.ops = &blktap_mq_ops;
-	tap->tag_set.nr_hw_queues = 1;
-	tap->tag_set.queue_depth = BLKTAP_RING_SIZE / 2;
-	tap->tag_set.numa_node = NUMA_NO_NODE;
-	tap->tag_set.flags = BLK_MQ_F_SHOULD_MERGE;
-	tap->tag_set.cmd_size = 0;
-	tap->tag_set.driver_data = tap;
+	memset(&tapdev->tag_set, 0, sizeof(tapdev->tag_set));
+	tapdev->tag_set.ops = &blktap_mq_ops;
+	tapdev->tag_set.nr_hw_queues = 1;
+	tapdev->tag_set.queue_depth = BLKTAP_RING_SIZE / 2;
+	tapdev->tag_set.numa_node = NUMA_NO_NODE;
+	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE;
+	tapdev->tag_set.cmd_size = 0;
+	tapdev->tag_set.driver_data = tap;
 
-	if (blk_mq_alloc_tag_set(&tap->tag_set))
+	if (blk_mq_alloc_tag_set(&tapdev->tag_set))
 		return NULL;
 
-	rq = blk_mq_init_queue(&tap->tag_set);
+	rq = blk_mq_init_queue(&tapdev->tag_set);
 	if (IS_ERR(rq)) {
-		blk_mq_free_tag_set(&tap->tag_set);
+		blk_mq_free_tag_set(&tapdev->tag_set);
 		return rq;
 	}
 
 	rq->queuedata = tap;
 
-	tap->rq = rq;
+	tapdev->rq = rq;
 
 	return rq;
 }
