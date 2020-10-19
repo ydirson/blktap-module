@@ -141,13 +141,14 @@ blktap_control_destroy_tap_ioctl(int minor)
 
 	ring = &tap->ring;
 
-	if (ring->vma == NULL && ring->n_pending)
+	if (ring->vma == NULL && atomic_read(&ring->n_pending))
 		printk(KERN_WARNING
 		       "blktap%d ring not mapped and n_pending %d\n",
-		       minor, ring->n_pending);
+		       minor, atomic_read(&ring->n_pending));
 
 	r = wait_event_interruptible(tap->remove_wait,
-				     ring->n_pending == 0 || ring->vma == NULL);
+				     atomic_read(&ring->n_pending) == 0 ||
+				     ring->vma == NULL);
 	if (r == -ERESTARTSYS)
 		return -EAGAIN;
 

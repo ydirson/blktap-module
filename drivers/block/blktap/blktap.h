@@ -58,7 +58,14 @@ struct blktap_ring {
 
 	int                            response;
 
-	int                            n_pending;
+	/* pending doesn't have any locking, but that is okay.  Insertions
+	 * happen under blktap_device->lock, so that is serialized.  Removal
+	 * uses the blktap_request->usr_idx, so they aren't iterating the
+	 * array.  As long as pointer assignments are atomic, then you don't
+	 * have to worry about Insertion and Removal racing.  In practice,
+	 * there are simultaneous operations, so n_pending needs to be
+	 * atomic_t to keep those in sync. */
+	atomic_t                       n_pending;
 	struct blktap_request         *pending[BLKTAP_RING_SIZE];
 
 	wait_queue_head_t              poll_wait;

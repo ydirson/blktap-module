@@ -215,7 +215,7 @@ blktap_ring_free_request(struct blktap *tap,
 	struct blktap_ring *ring = &tap->ring;
 
 	ring->pending[request->usr_idx] = NULL;
-	ring->n_pending--;
+	atomic_dec(&ring->n_pending);
 	wake_up_interruptible(&tap->remove_wait);
 
 	blktap_request_free(tap, request);
@@ -245,7 +245,7 @@ blktap_ring_make_request(struct blktap *tap)
 	request->usr_idx = usr_idx;
 
 	ring->pending[usr_idx] = request;
-	ring->n_pending++;
+	atomic_inc(&ring->n_pending);
 	wake_up_interruptible(&tap->remove_wait);
 
 	return request;
@@ -690,7 +690,8 @@ blktap_ring_pause(struct blktap *tap)
 		int r;
 
 		r = wait_event_interruptible_timeout(tap->remove_wait,
-						     !ring->n_pending, HZ / 10);
+						     atomic_read(&ring->n_pending) == 0,
+						     HZ / 10);
 		if (r == -ERESTARTSYS)
 			return -EAGAIN;
 		if (r > 0)
@@ -738,7 +739,7 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 	int usr_idx;
 
 	s += snprintf(s, end - s,
-		      "begin pending:%d\n", ring->n_pending);
+		      "begin pending:%d\n", atomic_read(&ring->n_pending));
 
 	for (usr_idx = 0; usr_idx < BLKTAP_RING_SIZE; usr_idx++) {
 		struct blktap_request *request;
