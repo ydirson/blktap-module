@@ -91,6 +91,8 @@ blktap_read_ring(struct blktap *tap)
 	}
 
 	ring->ring.rsp_cons = rc;
+
+	blktap_device_run_queues(tap);
 }
 
 #define MMAP_VADDR(_start, _req, _seg)				\
@@ -618,6 +620,9 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 
 	poll_wait(filp, &tap->pool->wait, wait);
 	poll_wait(filp, &ring->poll_wait, wait);
+
+	if (ring->vma)
+		blktap_device_run_queues(tap);
 
 	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
 	RING_PUSH_REQUESTS(&ring->ring);

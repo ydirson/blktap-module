@@ -219,6 +219,16 @@ static void cleanup_queue(struct request_queue *rq)
 	blk_mq_free_tag_set(&tapdev->tag_set);
 }
 
+void blktap_device_run_queues(struct blktap *tap)
+{
+	struct blktap_device *tapdev = &tap->device;
+
+	if (!tapdev->gd)
+		return;
+
+	blk_mq_start_stopped_hw_queues(tapdev->gd->queue, true);
+}
+
 static void
 blktap_device_restart(struct blktap *tap)
 {
