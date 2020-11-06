@@ -223,7 +223,8 @@ void blktap_device_run_queues(struct blktap *tap)
 	if (!tapdev->gd)
 		return;
 
-	blk_mq_start_stopped_hw_queues(tapdev->gd->queue, true);
+	if (!RING_FULL(&tap->ring.ring))
+		blk_mq_start_stopped_hw_queues(tapdev->gd->queue, true);
 }
 
 static void
@@ -473,11 +474,13 @@ blktap_device_try_destroy(struct blktap *tap)
 	return err;
 }
 
-static inline void flush_requests(struct blktap_ring *rinfo)
+static inline void flush_requests(struct blktap *tap)
 {
-	int notify;
+	struct blktap_ring *rinfo = &tap->ring;
 
-	RING_PUSH_REQUESTS_AND_CHECK_NOTIFY(&rinfo->ring, notify);
+	RING_PUSH_REQUESTS(&rinfo->ring);
+
+	blktap_ring_kick_user(tap);
 }
 
 static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
@@ -504,7 +507,7 @@ static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
 	}
 
 	if (qd->last)
-		blktap_ring_kick_user(tap);
+		flush_requests(tap);
 
 	mutex_unlock(&tapdev->lock);
 	return BLK_STS_OK;
@@ -529,7 +532,7 @@ static void blktap_commit_rqs(struct blk_mq_hw_ctx *hctx)
 {
 	struct blktap *tap = hctx->queue->queuedata;
 
-	blktap_ring_kick_user(tap);
+	flush_requests(tap);
 }
 
 static const struct blk_mq_ops blktap_mq_ops = {

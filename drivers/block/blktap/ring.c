@@ -616,16 +616,18 @@ static unsigned int blktap_ring_poll(struct file *filp, poll_table *wait)
 {
 	struct blktap *tap = filp->private_data;
 	struct blktap_ring *ring = &tap->ring;
+	struct blktap_device *tapdev = &tap->device;
 	int work;
 
 	poll_wait(filp, &tap->pool->wait, wait);
 	poll_wait(filp, &ring->poll_wait, wait);
 
+	mutex_lock(&tapdev->lock);
 	if (ring->vma)
 		blktap_device_run_queues(tap);
 
-	work = ring->ring.req_prod_pvt - ring->ring.sring->req_prod;
-	RING_PUSH_REQUESTS(&ring->ring);
+	work = ring->ring.sring->rsp_prod != ring->ring.sring->req_prod;
+	mutex_unlock(&tapdev->lock);
 
 	if (work ||
 	    *BLKTAP_RING_MESSAGE(ring->ring.sring) ||
