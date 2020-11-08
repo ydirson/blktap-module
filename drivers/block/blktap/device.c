@@ -614,7 +614,6 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	gd->fops = &blktap_device_file_operations;
 	gd->private_data = tapdev;
 
-	mutex_init(&tapdev->lock);
 	rq = init_queue(tap);
 	if (!rq) {
 		err = -ENOMEM;

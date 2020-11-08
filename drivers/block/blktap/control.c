@@ -84,6 +84,7 @@ blktap_control_create_tap(void)
 
 	kobject_get(&default_pool->kobj);
 	tap->pool = default_pool;
+	mutex_init(&tap->device.lock);
 
 	err = blktap_ring_create(tap);
 	if (err)
