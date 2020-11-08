@@ -128,10 +128,7 @@ blktap_device_end_request(struct blktap *tap,
 		"end_request: op=%d error=%d bytes=%d\n",
 		rq_data_dir(rq), error, blk_rq_bytes(rq));
 
-	// XXX Maybe this lock is unneeded
-	spin_lock_irq(&rq->q->queue_lock);
 	blk_mq_end_request(rq, error);
-	spin_unlock_irq(&rq->q->queue_lock);
 }
 
 int
