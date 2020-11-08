@@ -233,7 +233,7 @@ blktap_device_restart(struct blktap *tap)
 
         dev = &tap->device;
 
-        spin_lock_irq(&dev->lock);
+        mutex_lock(&dev->lock);
 
         /* Re-enable calldowns. */
         if (dev->gd) {
@@ -246,7 +246,7 @@ blktap_device_restart(struct blktap *tap)
                 blktap_ring_kick_user(tap);
         }
 
-        spin_unlock_irq(&dev->lock);
+        mutex_unlock(&dev->lock);
 }
 
 void
@@ -378,7 +378,6 @@ blktap_device_resume(struct blktap *tap)
 int
 blktap_device_pause(struct blktap *tap)
 {
-	unsigned long flags;
 	struct blktap_device *dev = &tap->device;
 
 	if (!test_bit(BLKTAP_DEVICE, &tap->dev_inuse))
@@ -387,12 +386,12 @@ blktap_device_pause(struct blktap *tap)
 	if (test_bit(BLKTAP_PAUSED, &tap->dev_inuse))
 		return 0;
 
-	spin_lock_irqsave(&dev->lock, flags);
+	mutex_lock(&dev->lock);
 
 	blk_mq_stop_hw_queues(dev->gd->queue);
 	set_bit(BLKTAP_PAUSE_REQUESTED, &tap->dev_inuse);
 
-	spin_unlock_irqrestore(&dev->lock, flags);
+	mutex_unlock(&dev->lock);
 
 	return blktap_ring_pause(tap);
 }
@@ -454,12 +453,12 @@ blktap_device_fail_queue(struct blktap *tap)
 	struct blktap_device *tapdev = &tap->device;
 	struct request_queue *q = tapdev->gd->queue;
 
-	spin_lock_irq(&tapdev->lock);
+	mutex_lock(&tapdev->lock);
 	// Moved inside lock like it was in 4.14
 	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 	cleanup_queue(tapdev->gd->queue);
 
-	spin_unlock_irq(&tapdev->lock);
+	mutex_unlock(&tapdev->lock);
 }
 
 int
@@ -484,13 +483,12 @@ static inline void flush_requests(struct blktap_ring *rinfo)
 static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
 				    const struct blk_mq_queue_data *qd)
 {
-	unsigned long flags;
 	struct blktap *tap = hctx->queue->queuedata;
 	struct blktap_device *tapdev = &tap->device;
 	struct blktap_ring *rinfo = &tap->ring;
 
 	blk_mq_start_request(qd->rq);
-	spin_lock_irqsave(&tapdev->lock, flags);
+	mutex_lock(&tapdev->lock);
 	if (RING_FULL(&rinfo->ring))
 		goto out_busy;
 
@@ -508,17 +506,17 @@ static blk_status_t blktap_queue_rq(struct blk_mq_hw_ctx *hctx,
 	if (qd->last)
 		blktap_ring_kick_user(tap);
 
-	spin_unlock_irqrestore(&tapdev->lock, flags);
+	mutex_unlock(&tapdev->lock);
 	return BLK_STS_OK;
 
 // EOPNOTSUPP
 out_err:
-	spin_unlock_irqrestore(&tapdev->lock, flags);
+	mutex_unlock(&tapdev->lock);
 	return BLK_STS_IOERR;
 
 out_busy:
 	blk_mq_stop_hw_queue(hctx);
-	spin_unlock_irqrestore(&tapdev->lock, flags);
+	mutex_unlock(&tapdev->lock);
 	return BLK_STS_DEV_RESOURCE;
 }
 
@@ -550,7 +548,7 @@ static struct request_queue *init_queue(struct blktap *tap)
 	tapdev->tag_set.nr_hw_queues = 1;
 	tapdev->tag_set.queue_depth = BLKTAP_RING_SIZE / 2;
 	tapdev->tag_set.numa_node = NUMA_NO_NODE;
-	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE;
+	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_BLOCKING;
 	tapdev->tag_set.cmd_size = 0;
 	tapdev->tag_set.driver_data = tap;
 
@@ -613,7 +611,7 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	gd->fops = &blktap_device_file_operations;
 	gd->private_data = tapdev;
 
-	spin_lock_init(&tapdev->lock);
+	mutex_init(&tapdev->lock);
 	rq = init_queue(tap);
 	if (!rq) {
 		err = -ENOMEM;

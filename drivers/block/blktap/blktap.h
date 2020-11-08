@@ -40,7 +40,7 @@ extern int blktap_device_major;
 #define BLKTAP2_RING_MESSAGE_RESUME  2
 
 struct blktap_device {
-	spinlock_t                     lock;
+	struct mutex                   lock;
 	struct gendisk                *gd;
 	struct request_queue          *rq;
 	struct blk_mq_tag_set          tag_set;
