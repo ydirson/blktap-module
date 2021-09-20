@@ -156,12 +156,12 @@ blktap_ring_map_segment(struct blktap *tap,
 	unsigned long uaddr;
 	int ret;
 
-	down_write(&ring->vma->vm_mm->mmap_sem);
+	mmap_write_lock(ring->vma->vm_mm);
 
 	uaddr = MMAP_VADDR(ring->user_vstart, request->usr_idx, seg);
 	ret = vm_insert_page(ring->vma, uaddr, request->pages[seg]);
 
-	up_write(&ring->vma->vm_mm->mmap_sem);
+	mmap_write_unlock(ring->vma->vm_mm);
 
 	return ret;
 }
@@ -750,20 +750,20 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 
 	for (usr_idx = 0; usr_idx < BLKTAP_RING_SIZE; usr_idx++) {
 		struct blktap_request *request;
-		struct timeval t;
+		struct timespec64 t;
 
 		request = ring->pending[usr_idx];
 		if (!request)
 			continue;
 
-		jiffies_to_timeval(jiffies, &t);
+		jiffies_to_timespec64(jiffies, &t);
 
 		s += snprintf(s, end - s,
 			      "%02d: usr_idx:%02d "
 			      "op:%x nr_pages:%02d time:%lu.%09lu\n",
 			      usr_idx, request->usr_idx,
 			      request->operation, request->nr_pages,
-			      t.tv_sec, t.tv_usec);
+			      t.tv_sec, t.tv_nsec);
 	}
 
 	s += snprintf(s, end - s, "end pending\n");
