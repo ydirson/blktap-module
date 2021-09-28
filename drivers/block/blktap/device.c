@@ -434,7 +434,12 @@ blktap_device_destroy(struct blktap *tap)
 	put_disk(gd);
 	tapdev->gd = NULL;
 
+	mutex_lock(&tapdev->lock);
+	/* Prevent a race with schedule_delayed_work from another thread. */
 	clear_bit(BLKTAP_DEVICE, &tap->dev_inuse);
+
+	cancel_delayed_work(&tap->destroy_work);
+	mutex_unlock(&tapdev->lock);
 
 	if (test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
 		blktap_control_destroy_tap(tap);

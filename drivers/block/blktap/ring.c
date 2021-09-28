@@ -347,9 +347,15 @@ blktap_ring_submit_request(struct blktap *tap,
 static void
 blktap_destroy_work_common(struct blktap *tap)
 {
+	struct blktap_device *tapdev = &tap->device;
+
 	if (blktap_device_try_destroy(tap)) {
-		schedule_delayed_work(&tap->destroy_work,
-				      BLKTAP_DESTROY_RETRY_PERIOD);
+		mutex_lock(&tapdev->lock);
+		if (test_bit(BLKTAP_DEVICE, &tap->dev_inuse)) {
+			schedule_delayed_work(&tap->destroy_work,
+					      BLKTAP_DESTROY_RETRY_PERIOD);
+		}
+		mutex_unlock(&tapdev->lock);
 	}
 }
 
