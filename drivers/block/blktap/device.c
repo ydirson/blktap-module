@@ -429,7 +429,7 @@ blktap_device_destroy(struct blktap *tap)
 		goto out;
 	}
 
-	blk_mq_stop_hw_queues(tapdev->rq);
+	blk_mq_stop_hw_queues(gd->queue);
 
 	del_gendisk(gd);
 	gd->private_data = NULL;
@@ -605,7 +605,6 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	gd->private_data = tapdev;
 
 	gd->queue->queuedata = tap;
-	tapdev->rq = gd->queue;
 	tapdev->gd = gd;
 
 	blktap_device_configure(tap, info);

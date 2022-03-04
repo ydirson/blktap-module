@@ -42,7 +42,6 @@ extern int blktap_device_major;
 struct blktap_device {
 	struct mutex                   lock;
 	struct gendisk                *gd;
-	struct request_queue          *rq;
 	struct blk_mq_tag_set          tag_set;
 };
 
