@@ -8,8 +8,6 @@
 
 #include "blktap.h"
 
-#define BLKTAP_DESTROY_RETRY_PERIOD (HZ/10) /*100 msec*/
-
 int blktap_ring_major;
 static struct cdev blktap_ring_cdev;
 
@@ -353,7 +351,7 @@ blktap_destroy_work_common(struct blktap *tap)
 		mutex_lock(&tapdev->lock);
 		if (test_bit(BLKTAP_DEVICE, &tap->dev_inuse)) {
 			schedule_delayed_work(&tap->destroy_work,
-					      BLKTAP_DESTROY_RETRY_PERIOD);
+					      msecs_to_jiffies(5000));
 		}
 		mutex_unlock(&tapdev->lock);
 	}
