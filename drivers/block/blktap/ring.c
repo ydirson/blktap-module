@@ -464,7 +464,7 @@ blktap_ring_set_message(struct blktap *tap, int msg)
         struct blktap_ring *ring = &tap->ring;
 
         if (ring->ring.sring)
-                ring->ring.sring->pad[0] = msg;
+                ring->ring.sring->__pad[0] = msg;
 }
 
 static long
@@ -771,7 +771,7 @@ blktap_ring_debug(struct blktap *tap, char *buf, size_t size)
 
 		s += snprintf(s, end - s,
 			      "%02d: usr_idx:%02d "
-			      "op:%x nr_pages:%02d time:%lu.%09lu\n",
+			      "op:%x nr_pages:%02d time:%lld.%09lu\n",
 			      usr_idx, request->usr_idx,
 			      request->operation, request->nr_pages,
 			      t.tv_sec, t.tv_nsec);

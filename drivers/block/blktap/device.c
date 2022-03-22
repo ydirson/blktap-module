@@ -14,6 +14,19 @@ int blktap_device_major;
 
 #define dev_to_blktap(_dev) container_of(_dev, struct blktap, device)
 
+static struct block_device *bdget_disk(struct gendisk *disk, int partno)
+{
+       struct block_device *bdev = NULL;
+
+       rcu_read_lock();
+       bdev = xa_load(&disk->part_tbl, partno);
+       if (bdev && !igrab(bdev->bd_inode))
+               bdev = NULL;
+       rcu_read_unlock();
+
+       return bdev;
+}
+
 struct blktap_req {
         blk_status_t    error;
 };
@@ -46,7 +59,10 @@ blktap_device_release(struct gendisk *disk, fmode_t mode)
 	struct block_device *bdev = bdget_disk(disk, 0);
 	struct blktap *tap = dev_to_blktap(tapdev);
 
-	bdput(bdev);
+	if (!bdev)
+		return;
+
+	iput(bdev->bd_inode);
 
 	if (!bdev->bd_openers) {
 		set_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse);
@@ -205,15 +221,6 @@ fail:
 		dev_warn(disk_to_dev(tapdev->gd),
 			 "make request: %d, failing\n", err);
 	goto _out;
-}
-
-static void cleanup_queue(struct request_queue *rq)
-{
-	struct blktap *tap = rq->queuedata;
-	struct blktap_device *tapdev = &tap->device;
-
-	blk_cleanup_queue(rq);
-	blk_mq_free_tag_set(&tapdev->tag_set);
 }
 
 void blktap_device_run_queues(struct blktap *tap)
@@ -410,15 +417,13 @@ blktap_device_destroy(struct blktap *tap)
 		return 0;
 
 	bdev = bdget_disk(gd, 0);
-
-	err = !mutex_trylock(&bdev->bd_mutex);
-	if (err) {
-		/* NB. avoid a deadlock. the last opener syncs the
-		 * bdev holding bd_mutex. */
-		err = -EBUSY;
-		goto out_nolock;
+	if (!bdev) {
+		/* don't goto out here, we would segfault dereferecing NULL */
+		err = -ENODEV;
+		return err;
 	}
 
+	mutex_lock(&tapdev->lock);
 	if (bdev->bd_openers) {
 		err = -EBUSY;
 		goto out;
@@ -429,26 +434,24 @@ blktap_device_destroy(struct blktap *tap)
 	del_gendisk(gd);
 	gd->private_data = NULL;
 
-	cleanup_queue(gd->queue);
+	blk_cleanup_disk(gd);
 
-	put_disk(gd);
+	blk_mq_free_tag_set(&tapdev->tag_set);
+
 	tapdev->gd = NULL;
 
-	mutex_lock(&tapdev->lock);
 	/* Prevent a race with schedule_delayed_work from another thread. */
 	clear_bit(BLKTAP_DEVICE, &tap->dev_inuse);
 
 	cancel_delayed_work(&tap->destroy_work);
-	mutex_unlock(&tapdev->lock);
 
 	if (test_bit(BLKTAP_SHUTDOWN_REQUESTED, &tap->dev_inuse))
 		blktap_control_destroy_tap(tap);
 
 	err = 0;
 out:
-	mutex_unlock(&bdev->bd_mutex);
-out_nolock:
-	bdput(bdev);
+	mutex_unlock(&tapdev->lock);
+	iput(bdev->bd_inode);
 
 	return err;
 }
@@ -462,7 +465,7 @@ blktap_device_fail_queue(struct blktap *tap)
 	mutex_lock(&tapdev->lock);
 	// Moved inside lock like it was in 4.14
 	blk_queue_flag_clear(QUEUE_FLAG_STOPPED, q);
-	cleanup_queue(tapdev->gd->queue);
+	blk_mq_free_tag_set(&tapdev->tag_set);
 
 	mutex_unlock(&tapdev->lock);
 }
@@ -546,36 +549,6 @@ static const struct blk_mq_ops blktap_mq_ops = {
 	.commit_rqs	= blktap_commit_rqs,
 };
 
-static struct request_queue *init_queue(struct blktap *tap)
-{
-	struct blktap_device *tapdev = &tap->device;
-	struct request_queue *rq;
-
-	memset(&tapdev->tag_set, 0, sizeof(tapdev->tag_set));
-	tapdev->tag_set.ops = &blktap_mq_ops;
-	tapdev->tag_set.nr_hw_queues = 1;
-	tapdev->tag_set.queue_depth = BLKTAP_RING_SIZE / 2;
-	tapdev->tag_set.numa_node = NUMA_NO_NODE;
-	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_BLOCKING;
-	tapdev->tag_set.cmd_size = 0;
-	tapdev->tag_set.driver_data = tap;
-
-	if (blk_mq_alloc_tag_set(&tapdev->tag_set))
-		return NULL;
-
-	rq = blk_mq_init_queue(&tapdev->tag_set);
-	if (IS_ERR(rq)) {
-		blk_mq_free_tag_set(&tapdev->tag_set);
-		return rq;
-	}
-
-	rq->queuedata = tap;
-
-	tapdev->rq = rq;
-
-	return rq;
-}
-
 int
 blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 {
@@ -595,7 +568,19 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	if (blktap_device_validate_info(tap, info))
 		return -EINVAL;
 
-	gd = alloc_disk(1);
+	memset(&tapdev->tag_set, 0, sizeof(tapdev->tag_set));
+	tapdev->tag_set.ops = &blktap_mq_ops;
+	tapdev->tag_set.nr_hw_queues = 1;
+	tapdev->tag_set.queue_depth = BLKTAP_RING_SIZE / 2;
+	tapdev->tag_set.numa_node = NUMA_NO_NODE;
+	tapdev->tag_set.flags = BLK_MQ_F_SHOULD_MERGE | BLK_MQ_F_BLOCKING;
+	tapdev->tag_set.cmd_size = 0;
+	tapdev->tag_set.driver_data = tap;
+
+	if (blk_mq_alloc_tag_set(&tapdev->tag_set))
+		return -ENOMEM;
+
+	gd = blk_mq_alloc_disk(&tapdev->tag_set, tapdev);
 	if (!gd) {
 		err = -ENOMEM;
 		goto fail;
@@ -613,44 +598,28 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 		sprintf(gd->disk_name, "td%c%c%c",
 			'a' + m1, 'a' + m2, 'a' + m3);
 	}
-
 	gd->major = blktap_device_major;
+	gd->minors = 1;
 	gd->first_minor = minor;
 	gd->fops = &blktap_device_file_operations;
 	gd->private_data = tapdev;
 
-	rq = init_queue(tap);
-	if (!rq) {
-		err = -ENOMEM;
-		goto fail;
-	}
-
-	gd->queue     = rq;
-	tapdev->gd    = gd;
+	gd->queue->queuedata = tap;
+	tapdev->rq = gd->queue;
+	tapdev->gd = gd;
 
 	blktap_device_configure(tap, info);
 	add_disk(gd);
 
 	set_bit(BLKTAP_DEVICE, &tap->dev_inuse);
 
-	dev_info(disk_to_dev(gd),
-		 "sector-size: %u/%u+%u capacity: %llu"
-		 " discard: %u+%u flush: %#lx\n",
-		 queue_logical_block_size(rq),
-		 queue_physical_block_size(rq),
-		 queue_alignment_offset(rq),
-		 (unsigned long long)get_capacity(gd),
-		 rq->limits.discard_granularity,
-		 queue_discard_alignment(rq),
-		 rq->queue_flags);
-
 	return 0;
 
 fail:
 	if (gd)
 		del_gendisk(gd);
-	if (rq)
-		cleanup_queue(rq);
+	if (tapdev)
+		blk_mq_free_tag_set(&tapdev->tag_set);
 
 	return err;
 }
@@ -683,7 +652,7 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 			      "bdev openers:%d closed:%d\n",
 			      bdev->bd_openers,
 			      test_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse));
-		bdput(bdev);
+		iput(bdev->bd_inode);
 	}
 
 	return s - buf;
