@@ -2,7 +2,6 @@
 #include <linux/device.h>
 #include <linux/module.h>
 #include <linux/sched.h>
-#include <linux/genhd.h>
 #include <linux/blkdev.h>
 
 #include "blktap.h"

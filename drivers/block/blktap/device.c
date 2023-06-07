@@ -64,7 +64,7 @@ blktap_device_release(struct gendisk *disk, fmode_t mode)
 
 	iput(bdev->bd_inode);
 
-	if (!bdev->bd_openers) {
+	if (!atomic_read(&bdev->bd_openers)) {
 		set_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse);
 		blktap_ring_kick_user(tap);
 	}
@@ -300,8 +300,6 @@ blktap_device_configure(struct blktap *tap,
 
 		limits->discard_granularity = info->trim_block_size;
 		limits->discard_alignment   = info->trim_block_offset;
-
-		blk_queue_flag_set(QUEUE_FLAG_DISCARD, rq);
 	}
 }
 
@@ -424,7 +422,7 @@ blktap_device_destroy(struct blktap *tap)
 	}
 
 	mutex_lock(&tapdev->lock);
-	if (bdev->bd_openers) {
+	if (atomic_read(&bdev->bd_openers)) {
 		err = -EBUSY;
 		goto out;
 	}
@@ -434,7 +432,7 @@ blktap_device_destroy(struct blktap *tap)
 	del_gendisk(gd);
 	gd->private_data = NULL;
 
-	blk_cleanup_disk(gd);
+	put_disk(gd);
 
 	blk_mq_free_tag_set(&tapdev->tag_set);
 
@@ -603,6 +601,7 @@ blktap_device_create(struct blktap *tap, struct blktap_device_info *info)
 	gd->first_minor = minor;
 	gd->fops = &blktap_device_file_operations;
 	gd->private_data = tapdev;
+	gd->flags |= GENHD_FL_NO_PART;
 
 	gd->queue->queuedata = tap;
 	tapdev->gd = gd;
@@ -649,7 +648,7 @@ blktap_device_debug(struct blktap *tap, char *buf, size_t size)
 	if (bdev) {
 		s += snprintf(s, end - s,
 			      "bdev openers:%d closed:%d\n",
-			      bdev->bd_openers,
+			      atomic_read(&bdev->bd_openers),
 			      test_bit(BLKTAP_DEVICE_CLOSED, &tap->dev_inuse));
 		iput(bdev->bd_inode);
 	}

@@ -247,6 +247,15 @@ static struct attribute *blktap_page_pool_attrs[] = {
 	NULL,
 };
 
+static const struct attribute_group blktap_page_pool_default_group = {
+  .attrs = blktap_page_pool_attrs,
+};
+
+static const struct attribute_group *blktap_page_pool_attr_groups[] = {
+  &blktap_page_pool_default_group,
+  NULL,
+};
+
 static inline struct kobject*
 __blktap_kset_find_obj(struct kset *kset, const char *name)
 {
@@ -303,10 +312,11 @@ blktap_page_pool_release(struct kobject *kobj)
 	kfree(pool);
 }
 
+ATTRIBUTE_GROUPS(blktap_page_pool);
 struct kobj_type blktap_page_pool_ktype = {
 	.release       = blktap_page_pool_release,
 	.sysfs_ops     = &blktap_page_pool_sysfs_ops,
-	.default_attrs = blktap_page_pool_attrs,
+	.default_groups = blktap_page_pool_groups,
 };
 
 static void*
