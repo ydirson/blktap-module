@@ -22,12 +22,24 @@ and histories will be rewritten
 * `blktap-dkms` [2011-11..2013-03]: direct commits from
   https://github.com/xapi-project/blktap-dkms
 * `xenclient-4.1` [2012-06]: collected from
-  https://www.citrix.com/downloads/xenclient/source.html (4.5.1 having
-  same patches as 4.1, and 2.0/2.1 apparently not sporting kernel source?)
+  https://www.citrix.com/downloads/xenclient/source.html, based off
+  `dstodden` (4.5.1 having same patches as 4.1, and 2.0/2.1 apparently
+  not sporting kernel source?)
+* `dstodden` [2011-03..2011-05]: collected from
+  git://xenbits.xensource.com/people/dstodden/linux.git branches
+  next-2.6.3[23679]
+* `dstodden-from-dmeyer` [2009-03..2011-03] filtered commit history from
+  upstream/xen/dom0/backend/blktap2, from import of 03-blktap2-patch
+  by Ian Campbell, which seems to come from Dutch Meyer's
+  https://xen-devel.narkive.com/KPJivIz4/5-patches-synchronize-blktap-with-citrix-blktap2
+  but has `BLKTAP2_IOCTL_`
 
 Not yet imported:
+* git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git
+  [2009-04..2010-01] joins linux XenServer 2.6.27 to XenClient 2.6.27
 * `xcpng`: patches in successive SRPMs in
   https://github.com/xcp-ng-rpms/kernel
+* small gap between `xenclient-4.1` and `openxt`
 
 Note that the initial commit in `xenclient-oe.git` was populated from
 OpenXT old patch queue at
@@ -49,3 +61,21 @@ connections):
 ```
         fetch = +refs/replace/*:refs/replace/*
 ```
+
+## disjoint partial timelines
+
+* `drivers/block/blktap2` timeline
+
+This is the XenServer/XCP-ng one, since XenServer 6.1 at least.
+
+* `drivers/block/blktap` timeline
+
+The OpenXT timeline can be traced through XenClient back to Daniel
+Stodden's `next-2.6.*` branches.
+
+* `drivers/xen/blktap` timeline
+
+The original(?) blktap2 timeline, for which we only have Daniel
+Stodden's `upstream/xen/dom0/backend/blktap2` branch, which (starting
+2009-03) could derive directly from Dutch Meyer's 2009-02, which seem
+to be the birth of blktap2.
