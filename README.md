@@ -13,13 +13,13 @@ code directly.
 Note this is a work in progress, and the current import are partial,
 and histories will be rewritten
 
-* `xenserver`: collected from SPRMs in source ISOs from 
+* `xenserver` [2012-09..]: collected from SPRMs in source ISOs from
   https://www.citrix.com/downloads/citrix-hypervisor/
-* `openxt`: collected from patches in
+* `openxt` [2014-06..]: collected from patches in
   https://github.com/OpenXT/xenclient-oe.git
-* `linux-3.x.pg`: collected from patches in old XS repo
+* `linux-3.x.pg` [2013-07..2015-09]: collected from patches in old XS repo
   https://github.com/xenserver/linux-3.x.pg
-* `blktap-dkms`: direct commits from
+* `blktap-dkms` [2011-11..2013-03]: direct commits from
   https://github.com/xapi-project/blktap-dkms
 
 Not yet imported:
