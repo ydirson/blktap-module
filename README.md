@@ -21,6 +21,9 @@ and histories will be rewritten
   https://github.com/xenserver/linux-3.x.pg
 * `blktap-dkms` [2011-11..2013-03]: direct commits from
   https://github.com/xapi-project/blktap-dkms
+* `xenclient-4.1` [2012-06]: collected from
+  https://www.citrix.com/downloads/xenclient/source.html (4.5.1 having
+  same patches as 4.1, and 2.0/2.1 apparently not sporting kernel source?)
 
 Not yet imported:
 * `xcpng`: patches in successive SRPMs in
