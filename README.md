@@ -36,12 +36,13 @@ and histories will be rewritten
   https://xen-devel.narkive.com/KPJivIz4/5-patches-synchronize-blktap-with-citrix-blktap2
   but has `BLKTAP2_IOCTL_`
 * `xenserver-2.6.27` [2009-04] base import of XenServer 2.6.27 in
-  git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git (already forking
+  git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git (forking
   off `dstodden-from-dmeyer`)
+*  `xenclient-2.6.27` [2009-04..2010-01]
+   git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git (just a pair of
+   patches)
 
 Not yet imported:
-* git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git
-  [2009-04..2010-01] joins linux XenServer 2.6.27 to XenClient 2.6.27
 * `xcpng`: patches in successive SRPMs in
   https://github.com/xcp-ng-rpms/kernel
 * small gap between `xenclient-4.1` and `openxt`
