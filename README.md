@@ -33,6 +33,9 @@ and histories will be rewritten
   by Ian Campbell, which seems to come from Dutch Meyer's
   https://xen-devel.narkive.com/KPJivIz4/5-patches-synchronize-blktap-with-citrix-blktap2
   but has `BLKTAP2_IOCTL_`
+* `xenserver-2.6.27` [2009-04] base import of XenServer 2.6.27 in
+  git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git (already forking
+  off `dstodden-from-dmeyer`)
 
 Not yet imported:
 * git://xenbits.xen.org/xenclient/linux-2.6.27-pq.git
