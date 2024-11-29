@@ -28,9 +28,11 @@ and histories will be rewritten
 * `dstodden` [2011-03..2011-05]: collected from
   git://xenbits.xensource.com/people/dstodden/linux.git branches
   next-2.6.3[23679]
-* `dstodden-from-dmeyer` [2009-03..2011-03] filtered commit history from
-  upstream/xen/dom0/backend/blktap2, from import of 03-blktap2-patch
-  by Ian Campbell, which seems to come from Dutch Meyer's
+* `jfitzhardinge-from-dmeyer` [2009-03..2010-07],
+  `dstodden-from-jfitzhardinge` [2010-08..2011-03] filtered commit
+  history from upstream/xen/dom0/backend/blktap2, from import of
+  03-blktap2-patch by Ian Campbell and Jeremy Fitzhardinge, which
+  seems to come from Dutch Meyer's
   https://xen-devel.narkive.com/KPJivIz4/5-patches-synchronize-blktap-with-citrix-blktap2
   but has `BLKTAP2_IOCTL_`
 * `xenserver-2.6.27` [2009-04] base import of XenServer 2.6.27 in
