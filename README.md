@@ -69,18 +69,28 @@ connections):
 
 ## disjoint partial timelines
 
-* `drivers/block/blktap2` timeline
+### `drivers/xen/blktap` / `drivers/xen/blktap2` timeline
 
-This is the XenServer/XCP-ng one, since XenServer 6.1 at least.
+* the original(?) blktap2 timeline, for which we only have Daniel
+Stodden's `upstream/xen/dom0/backend/blktap2` branch, which (starting
+2009-03) could derive directly from Dutch Meyer's 2009-02, which seem
+to be the birth of blktap2.
 
-* `drivers/block/blktap` timeline
+* `xenserver-2.6.27` (which uses the name `drivers/xen/blktap2`,
+  likely because of `blktap1` in `drivers/xen/blktap`) and
+  `xenclient-2.6.27`
+
+Notably has `BLKTAP2_IOCTL_*` which no other timeline has.
+
+### `drivers/block/blktap` timeline
 
 The OpenXT timeline can be traced through XenClient back to Daniel
 Stodden's `next-2.6.*` branches.
 
-* `drivers/xen/blktap` timeline
+Continuation of `drivers/xen/blktap`?
 
-The original(?) blktap2 timeline, for which we only have Daniel
-Stodden's `upstream/xen/dom0/backend/blktap2` branch, which (starting
-2009-03) could derive directly from Dutch Meyer's 2009-02, which seem
-to be the birth of blktap2.
+### `drivers/block/blktap2` timeline
+
+This is the XenServer/XCP-ng one, since XenServer 6.1 at least.
+
+Continuation of `drivers/xen/blktap2`?
