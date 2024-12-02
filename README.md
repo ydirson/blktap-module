@@ -95,3 +95,9 @@ Continuation of `drivers/xen/blktap`?
 This is the XenServer/XCP-ng one, since XenServer 6.1 at least.
 
 Continuation of `drivers/xen/blktap2`?
+
+The difference between the oldest-known source from XenServer 6.1 and
+the oldest-git-linked ancestor of OpenXT is not huge, and seems to
+consist mainly in code additions, BUT shows peculiar differences like
+the lack of the "Take tapdisk mmap sem where appropriate" patch which
+predates the history hole.
